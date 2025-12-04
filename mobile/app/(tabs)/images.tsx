@@ -16,22 +16,23 @@ export default function ImagesScreen() {
     async function uploadImageToAPI(imageUri: string) {
         try {
             // Create FormData for React Native
-            // const formData = new FormData();
-            // const fileName = imageUri.split('/').pop() ?? 'damage.jpg';
-            // formData.append('image', {
-            //     // @ts-ignore React Native file
-            //     uri: imageUri,
-            //     type: 'image/jpeg',
-            //     name: fileName,
-            // } as any);
+            const formData = new FormData();
+            const fileName = imageUri.split('/').pop() ?? 'damage.jpg';
+            formData.append('image', {
+                // @ts-ignore React Native file
+                uri: imageUri,
+                type: 'image/jpeg',
+                name: fileName,
+            } as any);
 
-            // // Make API call
-            // // Note: Don't set Content-Type header - React Native will set it automatically with boundary
-            // const res = await fetch(`${API_BASE_URL}/api/photo`, {
-            //     method: 'POST',
-            //     body: formData,
-            // });
+            // Make API call
+            // Note: Don't set Content-Type header - React Native will set it automatically with boundary
+            const res = await fetch(`${API_BASE_URL}/api/photo`, {
+                method: 'POST',
+                body: formData,
+            });
 
+            /**
             const base64 = await FileSystem.readAsStringAsync(imageUri, {
                 encoding: 'base64'
             });
@@ -48,6 +49,7 @@ export default function ImagesScreen() {
                 },
                 body: JSON.stringify(payload)
             });
+            **/
 
             // Read response as text first, then parse as JSON
             // This allows us to handle both JSON and non-JSON error responses
