@@ -55,7 +55,7 @@ export default function CameraScreen() {
             </TouchableOpacity>
 
             {loading && (
-                <View className="mt-4 flex-row items-center space-x-2">
+                <View className="mt-4 flex-row items-center gap-2">
                     <ActivityIndicator size="small" color="#6366f1" />
                     <Text className="text-slate-400 text-xs">
                         Analyzing damage…
