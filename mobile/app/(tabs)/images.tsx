@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, FlatList, Image, TouchableOpacity, Modal, ActivityIndicator, Alert, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useImages, type CapturedImage } from '../../context/ImagesContext';
 
 const API_BASE_URL = 'https://www.nexus.photos';
@@ -15,12 +15,19 @@ export default function ImagesScreen() {
 
     async function uploadImageToAPI(imageUri: string) {
         try {
+            // Compress and resize image before uploading to avoid 413 errors
+            const manipulatedImage = await ImageManipulator.manipulateAsync(
+                imageUri,
+                [{ resize: { width: 1920 } }], // Resize to max width of 1920px (maintains aspect ratio)
+                { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG } // Compress to 70% quality
+            );
+
             // Create FormData for React Native
             const formData = new FormData();
             const fileName = imageUri.split('/').pop() ?? 'damage.jpg';
             formData.append('image', {
                 // @ts-ignore React Native file
-                uri: imageUri,
+                uri: manipulatedImage.uri,
                 type: 'image/jpeg',
                 name: fileName,
             } as any);
@@ -64,7 +71,16 @@ export default function ImagesScreen() {
             }
 
             if (!res.ok) {
-                Alert.alert('Error', json.error ?? 'Failed to analyze image.');
+                // Handle 413 Payload Too Large error specifically
+                if (res.status === 413) {
+                    Alert.alert(
+                        'Image Too Large',
+                        'The image is too large to upload. Please try taking a photo with lower quality or resolution.',
+                        [{ text: 'OK' }]
+                    );
+                } else {
+                    Alert.alert('Error', json.error ?? 'Failed to analyze image.');
+                }
                 return;
             }
 
