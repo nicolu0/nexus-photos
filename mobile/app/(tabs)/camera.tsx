@@ -34,23 +34,59 @@ export default function CameraScreen() {
         });
     }
 
+    async function handlePickFromLibrary() {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission required', 'Photo library access is needed to select photos.');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: false,
+            quality: 0.7
+        });
+
+        if (result.canceled || !result.assets || !result.assets[0]) {
+            return;
+        }
+
+        const asset = result.assets[0];
+        setPreviewUri(asset.uri);
+
+        addImage({
+            uri: asset.uri,
+            createdAt: Date.now()
+        });
+    }
+
     return (
         <View className="flex-1 bg-slate-950 px-4 py-6" style={{ paddingTop: insets.top + 24 }}>
             <Text className="text-white text-xl font-semibold mb-1">
                 Camera
             </Text>
             <Text className="text-slate-400 text-xs mb-4">
-                Take a photo of a potential issue. It will show up in the Images tab.
+                Take a photo or select from your camera roll. It will show up in the Images tab.
             </Text>
 
-            <TouchableOpacity
-                onPress={handleTakePhoto}
-                className="mt-2 self-start rounded-full bg-indigo-500 px-5 py-3 active:bg-indigo-400"
-            >
-                <Text className="text-white text-sm font-semibold">
-                    Take photo
-                </Text>
-            </TouchableOpacity>
+            <View className="flex-row gap-3 mt-2">
+                <TouchableOpacity
+                    onPress={handleTakePhoto}
+                    className="flex-1 rounded-full bg-indigo-500 px-5 py-3 active:bg-indigo-400"
+                >
+                    <Text className="text-white text-sm font-semibold text-center">
+                        Take photo
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={handlePickFromLibrary}
+                    className="flex-1 rounded-full bg-slate-700 px-5 py-3 active:bg-slate-600"
+                >
+                    <Text className="text-white text-sm font-semibold text-center">
+                        Choose from library
+                    </Text>
+                </TouchableOpacity>
+            </View>
 
             {previewUri && (
                 <View className="mt-6 rounded-2xl border border-slate-800 overflow-hidden">
