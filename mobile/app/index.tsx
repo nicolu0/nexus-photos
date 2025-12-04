@@ -1,9 +1,5 @@
-import { View, ActivityIndicator } from 'react-native';
+import { Redirect } from 'expo-router';
 
 export default function Index() {
-    return (
-        <View className="flex-1 justify-center items-center bg-black">
-            <ActivityIndicator />
-        </View>
-    );
+    return <Redirect href="/(tabs)/camera" />;
 }
