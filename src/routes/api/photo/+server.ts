@@ -1,4 +1,7 @@
-// src/routes/api/damage-check/+server.ts
+export const config = {
+    csrf: false
+};
+
 import OpenAI from 'openai';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
