@@ -1,197 +1,301 @@
 <script lang="ts">
-    export let data: {
-        config: {
-            fromNumber: string | null;
-            landlordNumber: string | null;
-            vendorNumber: string | null;
-        };
-        events: {
-            id: string;
-            direction: 'inbound' | 'outbound';
-            at: string;
-            from: string;
-            to: string;
-            body: string;
-        }[];
-    };
+	import AlertPin from '$lib/components/landing/AlertPin.svelte';
+	import AuthModal from '$lib/components/modals/AuthModal.svelte';
+	import TopoMap from '$lib/components/landing/TopoMap.svelte';
+	import nexusLogo from '$lib/assets/nexus.svg';
+	import { goto } from '$app/navigation';
+	import supabase from '$lib/supabaseClient';
 
-    let to = data.config.vendorNumber ?? '';
-    let body = '';
+	let showAuthModal = $state(false);
+	let email = $state('');
+	let password = $state('');
+	let loading = $state(false);
+	let errorMessage = $state('');
+	let successMessage = $state('');
 
-    async function sendTest() {
-        if (!to || !body) return;
+	function openModal() {
+		showAuthModal = true;
+	}
 
-        const res = await fetch('/api/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to, body })
-        });
+	function closeModal() {
+		showAuthModal = false;
+		email = '';
+		password = '';
+		loading = false;
+		errorMessage = '';
+		successMessage = '';
+	}
 
-        if (res.ok) {
-            body = '';
-            const eventsRes = await fetch('/api/events');
-            const json = await eventsRes.json();
-            data.events = json.events;
-        } else {
-            console.error('send failed', await res.text());
-        }
-    }
+	function handleBackdropClick(e: MouseEvent) {
+		if (e.target === e.currentTarget) closeModal();
+	}
 
-    function formatTime(iso: string) {
-        return new Date(iso).toLocaleString();
-    }
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') closeModal();
+	}
+
+	async function submitEmail(e: SubmitEvent) {
+		e.preventDefault();
+		if (loading) return;
+		errorMessage = '';
+		successMessage = '';
+
+		if (!email || !password) {
+			errorMessage = 'Email and password are required.';
+			return;
+		}
+
+		loading = true;
+
+		try {
+			const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+				email,
+				password
+			});
+
+			if (!signInError) {
+				const userEmail = signInData.user?.email ?? email;
+				successMessage = `Signed in as ${userEmail}. Redirecting...`;
+				closeModal();
+				await goto('/dashboard');
+				return;
+			}
+
+			const { error: signUpError } = await supabase.auth.signUp({ email, password });
+
+			if (signUpError) {
+				if (/already registered/i.test(signUpError.message)) {
+					throw new Error('Incorrect password for this email.');
+				}
+				throw signUpError;
+			}
+
+			successMessage = 'Account created! Check your inbox to verify your email.';
+		} catch (err) {
+			errorMessage =
+				err instanceof Error ? err.message : 'Unable to sign up right now. Please try again later.';
+		} finally {
+			loading = false;
+		}
+	}
 </script>
 
-<main class="min-h-screen bg-slate-950 text-slate-100 flex justify-center px-4 py-8">
-    <div class="w-full max-w-6xl grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)]">
-        <!-- Left: Config + send test -->
-        <section
-            class="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl shadow-slate-950/40 p-6 flex flex-col gap-6"
-        >
-            <div class="space-y-1">
-                <h1 class="text-xl md:text-2xl font-semibold tracking-tight">
-                    Sinch SMS v0 Dashboard
-                </h1>
-                <p class="text-sm text-slate-400">
-                    Landlord &rarr; Sinch number &rarr; vendor bridge for early product testing.
-                </p>
-            </div>
+<svelte:window on:keydown={handleKeydown} />
 
-            <!-- Config card -->
-            <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-4 space-y-3">
-                <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-[0.12em]">
-                    Connection Details
-                </h2>
+<div class="flex min-h-screen w-full flex-col bg-stone-50 pt-10 font-sans text-stone-900">
+	<!-- Header -->
+	<nav
+		class="fixed top-6 right-0 left-0 z-50 mx-auto w-full max-w-7xl rounded-xl border border-stone-200/50 bg-stone-50/60 px-4 py-2 shadow-sm backdrop-blur-md transition-all duration-200"
+	>
+		<div class="container mx-auto flex items-center justify-between">
+			<div class="flex items-center gap-0.5">
+				<img src={nexusLogo} alt="Nexus logo" class="h-8 w-8" />
+				<span class="text-lg font-medium tracking-tight text-stone-700">Nexus</span>
+			</div>
+			<div class="hidden items-center gap-8 text-sm font-medium text-stone-600 md:flex">
+				<a href="#features" class="transition-colors hover:text-stone-900">Features</a>
+				<a href="#how-it-works" class="transition-colors hover:text-stone-900">How it works</a>
+				<a href="#pricing" class="transition-colors hover:text-stone-900">Pricing</a>
+				<button
+					type="button"
+					onclick={openModal}
+					class="rounded-lg bg-stone-800 px-4 py-2 text-stone-50 transition hover:bg-stone-900"
+				>
+					Sign up
+				</button>
+			</div>
+		</div>
+	</nav>
 
-                <div class="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1.5 text-sm">
-                    <span class="text-slate-400">Sinch number:</span>
-                    <span class="font-medium text-slate-100">
-                        {data.config.fromNumber ?? '—'}
-                    </span>
+	<!-- Hero -->
+	<section class="relative flex min-h-screen w-full items-center overflow-hidden pb-20">
+		<TopoMap />
 
-                    <span class="text-slate-400">Landlord (you):</span>
-                    <span class="font-medium text-slate-100">
-                        {data.config.landlordNumber ?? '—'}
-                    </span>
+		<div
+			class="pointer-events-none absolute inset-x-0 bottom-0 z-5 h-64
+         bg-linear-to-b from-transparent via-stone-50/80 to-stone-50"
+			aria-hidden="true"
+		></div>
 
-                    <span class="text-slate-400">Vendor (mock):</span>
-                    <span class="font-medium text-slate-100">
-                        {data.config.vendorNumber ?? '—'}
-                    </span>
-                </div>
+		<!-- pins overlay -->
+		<div class="pointer-events-none absolute inset-0 z-10 mx-auto max-w-7xl">
+			<div class="pointer-events-auto relative h-full w-full">
+				<AlertPin top="22%" left="14%" delay={600} severity="high" message="Basement Flooded" />
+				<AlertPin top="32%" left="95%" delay={1000} severity="medium" message="Toilet Clogged" />
+				<AlertPin top="58%" left="85%" delay={1400} severity="low" message="Photos Uploaded" />
+			</div>
+		</div>
 
-                <p class="text-xs text-slate-500 mt-2">
-                    Any SMS from <span class="font-semibold">Landlord</span> to the
-                    <span class="font-semibold">Sinch number</span> is automatically forwarded
-                    to the <span class="font-semibold">Vendor</span>.
-                </p>
-            </div>
+		<div class="relative z-10 container mx-auto flex flex-col items-center px-4">
+			<div class="max-w-6xl">
+				<h1
+					class="mb-6 text-6xl font-medium tracking-tight text-balance text-stone-800 md:text-7xl"
+				>
+					Effortless <span class="font-bold text-stone-800">AB2801</span> Compliance for Property Managers
+				</h1>
+				<p class="mb-10 max-w-2xl text-lg text-balance text-stone-600 md:text-xl">
+					AI-powered photo organization, damage detection, and security deduction reports. Protect
+					your properties and your business.
+				</p>
+				<div class="flex flex-col gap-3 sm:flex-row">
+					<button
+						type="button"
+						onclick={openModal}
+						class="rounded-lg bg-stone-800 px-8 py-3 font-medium text-stone-50 transition-colors hover:bg-stone-900"
+					>
+						Add your first unit
+					</button>
+					<button
+						type="button"
+						onclick={() => goto('#how-it-works')}
+						class="rounded-lg border border-stone-200 bg-white px-8 py-3 font-medium text-stone-800 transition hover:bg-stone-100"
+					>
+						See how it works
+					</button>
+				</div>
+			</div>
+		</div>
+		<!-- Trusted by -->
+		<div class="absolute inset-x-0 bottom-35 z-20">
+			<div class="mx-auto flex w-full flex-col items-center px-4">
+				<div class="text-sm font-medium text-stone-500">
+					Trusted by forward-thinking property managers
+				</div>
 
-            <!-- Send test message -->
-            <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-4 space-y-4">
-                <div class="flex items-baseline justify-between gap-2">
-                    <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-[0.12em]">
-                        Send Test Message
-                    </h2>
-                    <p class="text-[0.7rem] text-slate-500">
-                        This uses the same Sinch backend your SMS flow will.
-                    </p>
-                </div>
+				<div class="mt-4 flex flex-wrap items-center justify-center gap-10 opacity-80">
+					<div class="flex h-8 items-center justify-center rounded-md text-4xl font-semibold">
+						0,000+ Properties
+					</div>
+					<div class="flex h-8 items-center justify-center rounded-md text-4xl font-semibold">
+						0,000+ Units
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
 
-                <div class="space-y-3">
-                    <label class="block text-xs font-medium text-slate-300">
-                        To
-                        <input
-                            class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-0 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/50 transition"
-                            bind:value={to}
-                            placeholder="+1XXXXXXXXXX"
-                        />
-                    </label>
+	<!-- Features -->
+	<section id="features" class="w-full px-10 py-6">
+		<div class="mx-auto flex max-w-7xl flex-row items-center gap-10 rounded-md bg-stone-100 p-4">
+			<!-- Text column -->
+			<div class="px-6 lg:w-5/12">
+				<h2 class="text-2xl font-medium tracking-tight text-stone-900">
+					Built for AB2801, not generic storage
+				</h2>
+				<p class="mt-2 max-w-xl text-sm text-stone-600 md:text-base">
+					Photos are automatically organized by room, unit, and property. AI ensures that all photos
+					are properly matched.
+				</p>
+			</div>
 
-                    <label class="block text-xs font-medium text-slate-300">
-                        Body
-                        <textarea
-                            class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-0 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/50 transition resize-none"
-                            rows="4"
-                            bind:value={body}
-                            placeholder="Leak under kitchen sink in Unit 3B."
-                        />
-                    </label>
-                </div>
+			<!-- Gray “screenshot” box -->
+			<div class="w-7/12">
+				<div class="aspect-square w-full rounded-lg border border-stone-200 bg-stone-200/80">
+					<!-- Replace this box with a real screenshot later -->
+				</div>
+			</div>
+		</div>
+	</section>
 
-                <div class="flex items-center justify-between gap-3 pt-1">
-                    <button
-                        type="button"
-                        on:click={sendTest}
-                        disabled={!to || !body}
-                        class="inline-flex items-center justify-center rounded-full bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/40 transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        Send SMS
-                    </button>
+	<section id="features" class="w-full px-10 py-6">
+		<div class="mx-auto flex max-w-7xl flex-row items-center gap-10 rounded-md bg-stone-100 p-8">
+			<div class="w-7/12">
+				<div class="aspect-square w-full rounded-lg border border-stone-200 bg-stone-200/80">
+					<!-- Replace this box with a real screenshot later -->
+				</div>
+			</div>
+			<div class="lg:w-5/12">
+				<h2 class="text-2xl font-medium tracking-tight text-stone-900">
+					AI-powered damage detection
+				</h2>
+				<p class="mt-2 max-w-xl text-sm text-stone-600 md:text-base">
+					Every photo gets analyzed. AI will automatically notify you of damages and contact a
+					vendor on your approval.
+				</p>
+			</div>
+		</div>
+	</section>
 
-                    <p class="text-[0.7rem] text-slate-500">
-                        For v0, sending from your landlord phone directly to the Sinch number
-                        is the main test path.
-                    </p>
-                </div>
-            </div>
-        </section>
+	<section id="features" class="w-full px-10 py-6">
+		<div class="mx-auto flex max-w-7xl flex-row items-center gap-10 rounded-md bg-stone-100 p-8">
+			<!-- Text column -->
+			<div class="lg:w-5/12">
+				<h2 class="text-2xl font-medium tracking-tight text-stone-900">
+					Full compliance in one click
+				</h2>
+				<p class="mt-2 max-w-xl text-stone-600">
+					AB 2801 requires an itemized statement of every security-deposit deduction with proof.
+					Nexus generates one and sends it to the tenant automatically.
+				</p>
+			</div>
 
-        <!-- Right: Event stream -->
-        <section
-            class="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl shadow-slate-950/40 p-6 flex flex-col"
-        >
-            <div class="flex items-baseline justify-between gap-2 mb-4">
-                <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-[0.12em]">
-                    Recent Events
-                </h2>
-                <span class="text-[0.7rem] text-slate-500">
-                    Last {data.events.length} message{data.events.length === 1 ? '' : 's'}
-                </span>
-            </div>
+			<!-- Gray “screenshot” box -->
+			<div class="w-7/12">
+				<div class="aspect-square w-full rounded-lg border border-stone-200 bg-stone-200/80">
+					<!-- Replace this box with a real screenshot later -->
+				</div>
+			</div>
+		</div>
+	</section>
 
-            {#if data.events.length === 0}
-                <p class="text-sm text-slate-500">
-                    No events yet. Text your Sinch number from the landlord phone to start the flow.
-                </p>
-            {:else}
-                <ul class="space-y-3 overflow-y-auto pr-1 max-h-[70vh]">
-                    {#each data.events as e}
-                        <li
-                            class="rounded-xl border px-3.5 py-3 text-xs md:text-[0.8rem] bg-slate-900/70 border-slate-800/90 flex flex-col gap-1.5
-                                {e.direction === 'outbound'
-                                    ? 'ring-1 ring-emerald-400/40'
-                                    : 'ring-1 ring-slate-700/40'}"
-                        >
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="flex items-center gap-2">
-                                    <span
-                                        class="inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em]
-                                            {e.direction === 'outbound'
-                                                ? 'bg-emerald-500/10 text-emerald-300'
-                                                : 'bg-slate-500/10 text-slate-300'}"
-                                    >
-                                        {e.direction}
-                                    </span>
-                                </div>
-                                <span class="text-[0.65rem] text-slate-500">
-                                    {formatTime(e.at)}
-                                </span>
-                            </div>
+	<section id="features" class="w-full px-10 py-30">
+		<div class="mx-auto flex max-w-7xl flex-col items-center gap-6 rounded-md p-8">
+			<h2 class="text-3xl font-semibold tracking-tight text-stone-900 md:text-4xl">
+				Start your first move-in for free
+			</h2>
+			<button
+				type="button"
+				onclick={openModal}
+				class="inline-flex items-center gap-2 rounded-xl bg-stone-800 px-6 py-3 text-xl text-stone-50 transition hover:bg-stone-900"
+			>
+				<span>Add your first unit</span>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					fill="currentColor"
+					class="bi bi-arrow-right-short h-7 w-7"
+					viewBox="0 0 16 16"
+				>
+					<path
+						fill-rule="evenodd"
+						d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8"
+					/>
+				</svg>
+			</button>
+		</div>
+	</section>
 
-                            <div class="flex items-center gap-1 text-[0.7rem] text-slate-400">
-                                <span class="truncate max-w-[40%]">{e.from}</span>
-                                <span class="text-slate-500">→</span>
-                                <span class="truncate max-w-[40%]">{e.to}</span>
-                            </div>
+	<!-- Footer -->
+	<footer class="w-full border-t border-stone-200 bg-white py-10">
+		<div
+			class="container mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 md:flex-row"
+		>
+			<div class="flex items-center gap-2 text-sm text-stone-600">
+				<img src={nexusLogo} alt="Nexus logo" class="h-5 w-5" />
+				<span>Nexus</span>
+			</div>
+			<div class="text-xs text-stone-400">
+				© {new Date().getFullYear()} Nexus. All rights reserved.
+			</div>
+		</div>
+	</footer>
+</div>
 
-                            <pre class="mt-1 whitespace-pre-wrap text-[0.7rem] text-slate-100">
-                                {e.body}
-                            </pre>
-                        </li>
-                    {/each}
-                </ul>
-            {/if}
-        </section>
-    </div>
-</main>
+{#if showAuthModal}
+	<AuthModal
+		{email}
+		{password}
+		onEmailChange={(value) => {
+			email = value;
+		}}
+		onPasswordChange={(value) => {
+			password = value;
+		}}
+		{loading}
+		{errorMessage}
+		{successMessage}
+		{submitEmail}
+		onClose={closeModal}
+		onBackdropClick={handleBackdropClick}
+		onKeydown={handleKeydown}
+	/>
+{/if}
