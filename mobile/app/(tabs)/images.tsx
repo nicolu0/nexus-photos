@@ -25,15 +25,23 @@ export default function ImagesScreen() {
             } as any);
 
             // Make API call
+            // Note: Don't set Content-Type header - React Native will set it automatically with boundary
             const res = await fetch(`${API_BASE_URL}/api/photo`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
                 body: formData,
             });
 
-            const json = await res.json();
+            // Read response as text first, then parse as JSON
+            // This allows us to handle both JSON and non-JSON error responses
+            const responseText = await res.text();
+            
+            let json;
+            try {
+                json = JSON.parse(responseText);
+            } catch (parseError) {
+                // If it's not JSON, show the raw response (likely an error page)
+                throw new Error(`Server error (${res.status}): ${responseText.substring(0, 200)}`);
+            }
 
             if (!res.ok) {
                 Alert.alert('Error', json.error ?? 'Failed to analyze image.');
