@@ -36,18 +36,29 @@ const VERIFIED_VENDORS = [
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
-		const formData = await request.formData();
-		const file = formData.get('image');
+		// const formData = await request.formData();
+		// const file = formData.get('image');
 
-		if (!(file instanceof File)) {
-			return json({ error: 'Missing image file "image"' }, { status: 400 });
-		}
+		// if (!(file instanceof File)) {
+		// 	return json({ error: 'Missing image file "image"' }, { status: 400 });
+		// }
 
-		// Convert uploaded File -> base64 data URL
-		const arrayBuffer = await file.arrayBuffer();
-		const buffer = Buffer.from(arrayBuffer);
-		const base64 = buffer.toString('base64');
-		const dataUrl = `data:${file.type || 'image/jpeg'};base64,${base64}`;
+		// // Convert uploaded File -> base64 data URL
+		// const arrayBuffer = await file.arrayBuffer();
+		// const buffer = Buffer.from(arrayBuffer);
+		// const base64 = buffer.toString('base64');
+        // const dataUrl = `data:${file.type || 'image/jpeg'};base64,${base64}`;
+
+        const { imageBase64, mimeType } = (await request.json()) as {
+            imageBase64?: string;
+            mimeType?: string;
+        };
+
+        if (!imageBase64 || typeof imageBase64 !== 'string') {
+            return json({ error: 'Missing or invalid "imageBase64"' }, { status: 400 });
+        }
+
+        const dataUrl = `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`;
 
 		const response = await client.responses.create({
 			model: 'gpt-5-nano-2025-08-07',

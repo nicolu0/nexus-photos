@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, FlatList, Image, TouchableOpacity, Modal, ActivityIndicator, Alert, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useImages, type CapturedImage } from '../../context/ImagesContext';
 
 const API_BASE_URL = 'https://www.nexus.photos';
@@ -15,20 +16,37 @@ export default function ImagesScreen() {
     async function uploadImageToAPI(imageUri: string) {
         try {
             // Create FormData for React Native
-            const formData = new FormData();
-            const fileName = imageUri.split('/').pop() ?? 'damage.jpg';
-            formData.append('image', {
-                // @ts-ignore React Native file
-                uri: imageUri,
-                type: 'image/jpeg',
-                name: fileName,
-            } as any);
+            // const formData = new FormData();
+            // const fileName = imageUri.split('/').pop() ?? 'damage.jpg';
+            // formData.append('image', {
+            //     // @ts-ignore React Native file
+            //     uri: imageUri,
+            //     type: 'image/jpeg',
+            //     name: fileName,
+            // } as any);
 
-            // Make API call
-            // Note: Don't set Content-Type header - React Native will set it automatically with boundary
+            // // Make API call
+            // // Note: Don't set Content-Type header - React Native will set it automatically with boundary
+            // const res = await fetch(`${API_BASE_URL}/api/photo`, {
+            //     method: 'POST',
+            //     body: formData,
+            // });
+
+            const base64 = await FileSystem.readAsStringAsync(imageUri, {
+                encoding: 'base64'
+            });
+
+            const payload = {
+                imageBase64: base64,
+                mimeType: 'image/jpeg'
+            };
+
             const res = await fetch(`${API_BASE_URL}/api/photo`, {
                 method: 'POST',
-                body: formData,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
             });
 
             // Read response as text first, then parse as JSON
