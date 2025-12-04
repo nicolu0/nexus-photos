@@ -1,9 +1,10 @@
+import { env } from '$env/dynamic/private';
 import { addEvent } from './events';
 
-const region = process.env.SINCH_REGION ?? 'us';
-const servicePlanId = process.env.SINCH_SERVICE_PLAN_ID;
-const apiToken = process.env.SINCH_API_TOKEN;
-const fromNumber = process.env.SINCH_FROM_NUMBER;
+const region = env.SINCH_REGION ?? 'us';
+const servicePlanId = env.SINCH_SERVICE_PLAN_ID;
+const apiToken = env.SINCH_API_TOKEN;
+const fromNumber = env.SINCH_FROM_NUMBER;
 
 if (!servicePlanId || !apiToken || !fromNumber) {
     console.warn('Missing SINCH_SERVICE_PLAN_ID, SINCH_API_TOKEN, or SINCH_FROM_NUMBER');
@@ -14,7 +15,7 @@ export async function sendMessage(to: string, body: string) {
         throw new Error('Missing SINCH_SERVICE_PLAN_ID, SINCH_API_TOKEN, or SINCH_FROM_NUMBER');
     }
 
-    const url = `https://${region}.sms.api.sinch.com/v1/${servicePlanId}/batches`;
+    const url = `https://${region}.sms.api.sinch.com/xms/v1/${servicePlanId}/batches`;
 
     const payload = {
         from: fromNumber,
