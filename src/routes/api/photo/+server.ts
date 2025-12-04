@@ -2,7 +2,8 @@
 import OpenAI from 'openai';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { OPENAI_API_KEY } from '$env/static/private';
+import { OPENAI_API_KEY, VENDOR_PHONE_NUMBER } from '$env/static/private';
+import { sendMessage } from '$lib/server/sinch';
 
 const client = new OpenAI({
 	apiKey: OPENAI_API_KEY
@@ -48,7 +49,7 @@ export const POST: RequestHandler = async ({ request }) => {
 							type: 'input_text',
 							text:
 								'Output a concise damage summary for a landlord:\n' +
-								'- If there IS damage: return 1–5 bullet points, each like "Area: short description (approx severity)".\n' +
+								'- If there IS damage: return 1-5 bullet points, each like "Area: short description (approx severity)".\n' +
 								'- If there is NO visible damage: return exactly "No visible damage in this photo.".\n' +
 								'- Do not mention things that are ambiguous or not clearly visible.'
 						}
@@ -58,7 +59,28 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 
 		const summary = response.output_text ?? '';
-		return json({ summary });
+
+        let sentToVendor = false;
+        let sendError: string | null = null;
+
+        if (!VENDOR_PHONE_NUMBER) {
+            console.warn('VENDOR_PHONE_NUMBER is not set, skipping vendor SMS');
+        } else if (!summary.trim()) {
+            console.warn('No summary returned from OpenAI, skipping vendor SMS');
+        } else {
+            const messageBody =
+                `New damage report:\n\n${summary}\n\nGenerated at: ${new Date().toISOString()}`;
+
+            try {
+                await sendMessage(VENDOR_PHONE_NUMBER, messageBody);
+                sentToVendor = true;
+            } catch (error: any) {
+                console.error('Failed to send vendor SMS:', error);
+                sendError = error?.message ?? 'Failed to send vendor SMS';
+            }
+        }
+        
+		return json({ summary, sentToVendor, sendError });
 		
 	} catch (error) {
 		console.error('Damage check error:', error);
