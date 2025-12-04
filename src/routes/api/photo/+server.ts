@@ -14,14 +14,20 @@ const VERIFIED_VENDORS = [
 		id: 'plumber',
 		trade: 'plumber',
 		name: 'Mario and Luigi',
-		phone: '+1-111-111-1111'
+		phone: VENDOR_PHONE_NUMBER
 	},
 	{
 		id: 'electrician',
 		trade: 'electrician',
 		name: 'Zeri',
-		phone: '+1-222-222-2222'
-	}
+		phone: VENDOR_PHONE_NUMBER
+	},
+    {
+        id: 'handyman',
+        trade: 'general repair',
+        name: 'Jose',
+        phone: VENDOR_PHONE_NUMBER
+    }
 ] as const;
 
 
@@ -71,7 +77,7 @@ export const POST: RequestHandler = async ({ request }) => {
 								'1) Summarize visible damage in <= 5 short bullet points for landlord and vendor.\n' +
 								'2) Decide what kind of vendor is needed to fix the *main* issue.\n' +
 								'3) If an appropriate vendor exists in the list, choose exactly ONE by trade and name.\n' +
-								'4) If no vendor in the list matches, say what trade is needed instead and for name, put new.\n\n' +
+								'4) If no vendor in the list matches, default to "handyman" and "Jose".\n\n' +
 								'Rules:\n' +
 								'- If there is NO visible damage: explanation = "No visible damage in this photo." and trade = null and name = null.\n' +
 								'- Do NOT mention anything ambiguous or not clearly visible.\n'
@@ -99,21 +105,45 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		});
 
-		const summary = response.output_text ?? '';
+		const outputText = response.output_text ?? '';
+		
+		// Parse the JSON response from OpenAI
+		let parsedResponse: { summary: string; trade: string | null; name: string | null };
+		try {
+			parsedResponse = JSON.parse(outputText);
+		} catch (error) {
+			console.error('Failed to parse OpenAI response:', error);
+			return json({ error: 'Failed to parse AI response' }, { status: 500 });
+		}
 
+		const summary = parsedResponse.summary ?? '';
+		const vendorName = parsedResponse.name;
+		const vendorTrade = parsedResponse.trade;
+        
         let sentToVendor = false;
         let sendError: string | null = null;
 
-        if (!VENDOR_PHONE_NUMBER) {
-            console.warn('VENDOR_PHONE_NUMBER is not set, skipping vendor SMS');
+        // Find vendor by name in VERIFIED_VENDORS array
+        let vendorPhoneNumber: string | null = null;
+        if (vendorName) {
+            const vendor = VERIFIED_VENDORS.find(v => v.name === vendorName);
+            if (vendor) {
+                vendorPhoneNumber = vendor.phone;
+            } else {
+                console.warn(`Vendor "${vendorName}" not found in VERIFIED_VENDORS`);
+            }
+        }
+
+        if (!vendorPhoneNumber) {
+            console.warn('No vendor phone number found, skipping vendor SMS');
         } else if (!summary.trim()) {
             console.warn('No summary returned from OpenAI, skipping vendor SMS');
         } else {
             const messageBody =
-                `New damage report:\n\n${summary}\n\nGenerated at: ${new Date().toISOString()}`;
+                `Hi ${vendorName}, here is a new damage report for ${vendorTrade}:\n\n${summary}\n\nGenerated at: ${new Date().toISOString()}`;
 
             try {
-                await sendMessage(VENDOR_PHONE_NUMBER, messageBody);
+                await sendMessage(vendorPhoneNumber, messageBody);
                 sentToVendor = true;
             } catch (error: any) {
                 console.error('Failed to send vendor SMS:', error);
