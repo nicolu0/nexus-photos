@@ -165,7 +165,7 @@ export const POST: RequestHandler = async ({ request }) => {
             }
         }
         
-		return json({ summary, sentToVendor, sendError });
+		return json({ summary, sentToVendor, sendError, name: vendorName, trade: vendorTrade });
 		
 	} catch (error) {
 		console.error('Damage check error:', error);

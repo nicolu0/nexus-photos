@@ -66,7 +66,13 @@ export default function ImagesScreen() {
                 return;
             }
 
-            if (json.sentToVendor) {
+            if (json.name === null || json.trade === null) {
+                Alert.alert(
+                    'No Damage Detected',
+                    'The image was analyzed and no visible damage was found.',
+                    [{ text: 'OK' }]
+                );
+            } else if (json.sentToVendor) {
                 Alert.alert('Sent', 'Damage summary sent to vendor.', [
                     { text: 'OK' }
                 ]);
