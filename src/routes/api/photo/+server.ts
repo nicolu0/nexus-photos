@@ -9,6 +9,22 @@ const client = new OpenAI({
 	apiKey: OPENAI_API_KEY
 });
 
+const VERIFIED_VENDORS = [
+	{
+		id: 'plumber',
+		trade: 'plumber',
+		name: 'Mario and Luigi',
+		phone: '+1-111-111-1111'
+	},
+	{
+		id: 'electrician',
+		trade: 'electrician',
+		name: 'Zeri',
+		phone: '+1-222-222-2222'
+	}
+] as const;
+
+
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const formData = await request.formData();
@@ -48,14 +64,39 @@ export const POST: RequestHandler = async ({ request }) => {
 						{
 							type: 'input_text',
 							text:
-								'Output a concise damage summary for a landlord:\n' +
-								'- If there IS damage: return 1-5 bullet points, each like "Area: short description (approx severity)".\n' +
-								'- If there is NO visible damage: return exactly "No visible damage in this photo.".\n' +
-								'- Do not mention things that are ambiguous or not clearly visible.'
+								'You also have a list of verified vendors (JSON below):\n' +
+								JSON.stringify(VERIFIED_VENDORS) +
+								'\n\n' +
+								'Task:\n' +
+								'1) Summarize visible damage in <= 5 short bullet points for landlord and vendor.\n' +
+								'2) Decide what kind of vendor is needed to fix the *main* issue.\n' +
+								'3) If an appropriate vendor exists in the list, choose exactly ONE by trade and name.\n' +
+								'4) If no vendor in the list matches, say what trade is needed instead and for name, put new.\n\n' +
+								'Rules:\n' +
+								'- If there is NO visible damage: explanation = "No visible damage in this photo." and trade = null and name = null.\n' +
+								'- Do NOT mention anything ambiguous or not clearly visible.\n'
 						}
 					]
 				}
-			]
+			],
+			text: {
+				format: {
+					name: 'output',
+					type: 'json_schema',
+					strict: true,
+					schema: {
+						type: 'object',
+						properties: {
+							summary: { type: 'string' },
+							trade: { type: ['string', 'null'] },
+							name: { type: ['string', 'null'] }
+						},
+						required: ['summary', 'trade', 'name'],
+						additionalProperties: false
+					}
+				}
+			}
+
 		});
 
 		const summary = response.output_text ?? '';
