@@ -3,7 +3,7 @@ import { View, Text, FlatList, Image, TouchableOpacity, Modal, ActivityIndicator
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useImages, type CapturedImage } from '../../context/ImagesContext';
 
-const API_BASE_URL = 'https://www.nexus.photos';
+const API_BASE_URL = 'https://daphne-unradical-barb.ngrok-free.dev';
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ImagesScreen() {

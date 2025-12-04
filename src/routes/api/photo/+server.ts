@@ -1,12 +1,12 @@
-export const config = {
-    csrf: false
-};
-
 import OpenAI from 'openai';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { OPENAI_API_KEY, VENDOR_PHONE_NUMBER } from '$env/static/private';
 import { sendMessage } from '$lib/server/sinch';
+
+export const config = {
+	csrf: false
+};
 
 const client = new OpenAI({
 	apiKey: OPENAI_API_KEY
