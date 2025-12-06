@@ -166,11 +166,16 @@ export const POST: RequestHandler = async ({ request }) => {
                 `Hi ${vendorName}, here is a new damage report for ${vendorTrade}:\n\n${summary}\n\nGenerated at: ${new Date().toISOString()}`;
 
             try {
-                await sendMessage(vendorPhoneNumber, messageBody);
+                await sendMessage(vendorPhoneNumber, messageBody, {
+                    landlordPhone: env.LANDLORD_PHONE_NUMBER || '',
+                    vendorPhone: vendorPhoneNumber,
+                    senderRole: 'system',
+                    workOrderId: null // TODO: add work order id
+                });
                 sentToVendor = true;
 
                 // Create work order in dashboard after successfully sending SMS
-                if (supabase && vendorName && vendorTrade) {
+                if (supabase && vendorPhoneNumber) {
                     try {
                         const landlordPhone = env.LANDLORD_PHONE_NUMBER || '';
                         // Normalize phone numbers for consistent matching
@@ -183,8 +188,6 @@ export const POST: RequestHandler = async ({ request }) => {
                             .insert({
                                 landlord_phone: normalizedLandlordPhone,
                                 vendor_phone: normalizedVendorPhone,
-                                vendor_name: vendorName,
-                                vendor_trade: vendorTrade,
                                 summary: summary,
                                 status: 'pending'
                             });

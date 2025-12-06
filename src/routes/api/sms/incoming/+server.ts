@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { addEvent } from '$lib/server/events';
 import { sendMessage } from '$lib/server/sinch';
-import { classifyVendorSms, type VendorSmsClassification } from '$lib/server/openai';
+import { classifyVendorSms } from '$lib/server/openai';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 
@@ -32,10 +32,12 @@ export const POST: RequestHandler = async ({ request }) => {
         return json({ error: 'Invalid JSON payload' }, { status: 400 });
     }
 
+    const inboundAt = payload.received_at ?? new Date().toISOString();
+
     addEvent({
         id: payload.id ?? crypto.randomUUID(),
         direction: 'inbound',
-        at: payload.received_at ?? new Date().toISOString(),
+        at: inboundAt,
         from: payload.from,
         to: payload.to,
         body: payload.body ?? '',
@@ -48,13 +50,37 @@ export const POST: RequestHandler = async ({ request }) => {
 
     const body = payload.body ?? '';
 
+    const senderRole: 'landlord' | 'vendor' | 'system' =
+        fromNorm === landlordNorm ? 'landlord' :
+        fromNorm === vendorNorm ? 'vendor' :
+        'system';
+
+    try {
+        await supabase.from('messages').insert({
+            landlord_phone: landlordNorm,
+            vendor_phone: vendorNorm,
+            sender_role: senderRole,
+            direction: 'inbound',
+            body: body,
+            work_order_id: null, // TODO: add work order id
+            received_at: inboundAt
+        })
+    } catch (err) {
+        console.error('Failed to insert inbound message into messages table:', err);
+    }
+
     if (!landlordNorm || !vendorNorm) {
         console.warn('LANDLORD_PHONE_NUMBER or VENDOR_PHONE_NUMBER missing in env, skipping forward');
     } else if (fromNorm === landlordNorm) {
         const forwardBody = `Work request from landlord ${payload.from}:\n${body}`;
 
         try {
-            await sendMessage(vendorNumber!, forwardBody);
+            await sendMessage(vendorNumber!, forwardBody, {
+                landlordPhone: landlordNumber ?? null,
+                vendorPhone: vendorNumber ?? null,
+                senderRole: 'landlord',
+                workOrderId: null // TODO: add work order id
+            });
         } catch (err) {
             console.error('Failed to forward landlord message to vendor:', err);
         }
@@ -75,7 +101,12 @@ export const POST: RequestHandler = async ({ request }) => {
         const forwardBody = `Update from vendor ${payload.from}:\n${body}`;
 
         try {
-            await sendMessage(landlordNumber!, forwardBody);
+            await sendMessage(landlordNumber!, forwardBody, {
+                landlordPhone: landlordNumber ?? null,
+                vendorPhone: vendorNumber ?? null,
+                senderRole: 'vendor',
+                workOrderId: null // TODO: add work order id
+            });
         } catch (err) {
             console.error('Failed to forward vendor message to landlord:', err);
         }
