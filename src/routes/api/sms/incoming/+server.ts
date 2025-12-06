@@ -1,7 +1,6 @@
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
-import { addEvent } from '$lib/server/events';
 import { sendMessage } from '$lib/server/sinch';
 import { classifyVendorSms } from '$lib/server/openai';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
@@ -33,15 +32,6 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const inboundAt = payload.received_at ?? new Date().toISOString();
-
-    addEvent({
-        id: payload.id ?? crypto.randomUUID(),
-        direction: 'inbound',
-        at: inboundAt,
-        from: payload.from,
-        to: payload.to,
-        body: payload.body ?? '',
-    });
 
     const fromNorm = normalize(payload.from);
     const landlordNorm = normalize(landlordNumber);

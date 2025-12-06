@@ -1,5 +1,4 @@
 import { env } from '$env/dynamic/private';
-import { addEvent } from './events';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 
@@ -50,17 +49,7 @@ export async function sendMessage(to: string, body: string, options: SendMessage
         throw new Error(`Failed to send message: ${res.status}`);
     }
 
-    const id = (json as any).id ?? crypto.randomUUID();
     const now = new Date().toISOString();
-
-    addEvent({
-        id,
-        direction: 'outbound',
-        at: now,
-        from: fromNumber,
-        to,
-        body,
-    });
 
     try {
         await supabase.from('messages').insert({
