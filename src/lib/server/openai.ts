@@ -1,0 +1,109 @@
+import OpenAI from 'openai';
+import { OPENAI_API_KEY } from '$env/static/private';
+
+const openaiClient = new OpenAI({
+    apiKey: OPENAI_API_KEY
+});
+
+export type VendorSmsCategory = 'confirmation' | 'completion' | 'other';
+
+export interface VendorSmsClassification {
+    category: VendorSmsCategory;
+    confidence?: number;
+    reasoning?: string;
+}
+
+export async function classifyVendorSms(body: string): Promise<VendorSmsClassification> {
+    const trimmed = body.trim();
+
+    if (!trimmed) {
+        return {
+            category: 'other',
+            confidence: 0,
+            reasoning: 'Empty or whitespace-only message'
+        };
+    }
+
+    const response = await openaiClient.responses.create({
+        model: 'gpt-5-nano-2025-08-07',
+        instructions:
+            'You are classifying SMS messages from a vendor or contractor who is ' +
+            'communicating with a landlord about repair or maintenance work orders.\n\n' +
+            '- "confirmation": The vendor is clearly accepting, agreeing to, or scheduling ' +
+            '  the work (e.g., "I can come on Friday", "I will fix this tomorrow", ' +
+            '  "Okay, I will take care of it").\n' +
+            '- "completion": The vendor is clearly stating that the work has been finished ' +
+            '  (e.g., "I just fixed the issue in unit 302", "the light is replaced").\n' +
+            '- "other": Questions, price discussions, unclear messages, or anything that is ' +
+            '  not clearly confirmation or completion.\n\n' +
+            'If neither confirmation nor completion clearly fits, classify as "other".',
+        input: [
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'input_text',
+                        text:
+                            'Classify this VENDOR SMS into one of: "confirmation", "completion", or "other".\n\n' +
+                            `Vendor SMS: "${trimmed}"`
+                    }
+                ]
+            }
+        ],
+        text: {
+            format: {
+                name: 'classification',
+                type: 'json_schema',
+                strict: true,
+                schema: {
+                    type: 'object',
+                    properties: {
+                        category: {
+                            type: 'string',
+                            enum: ['confirmation', 'completion', 'other']
+                        },
+                        confidence: {
+                            type: 'number',
+                            description: 'Model confidence from 0.0 to 1.0'
+                        },
+                        reasoning: {
+                            type: 'string',
+                            description: 'Short explanation of why this category was chosen'
+                        }
+                    },
+                    required: ['category', 'confidence', 'reasoning'],
+                    additionalProperties: false
+                }
+            }
+        }
+    });
+
+    const outputText = response.output_text ?? '';
+
+    try {
+        const parsed = JSON.parse(outputText) as VendorSmsClassification;
+
+        if (
+            parsed &&
+            (parsed.category === 'confirmation' ||
+                parsed.category === 'completion' ||
+                parsed.category === 'other')
+        ) {
+            return parsed;
+        }
+
+        console.warn('Parsed vendor classification has unexpected shape:', parsed);
+        return {
+            category: 'other',
+            confidence: parsed?.confidence ?? 0,
+            reasoning: parsed?.reasoning ?? 'Unexpected classification format'
+        };
+    } catch (err) {
+        console.warn('Failed to parse OpenAI vendor classification JSON:', err, outputText);
+        return {
+            category: 'other',
+            confidence: 0,
+            reasoning: 'Failed to parse model output as JSON'
+        };
+    }
+}

@@ -2,6 +2,9 @@ import OpenAI from 'openai';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { OPENAI_API_KEY, VENDOR_PHONE_NUMBER } from '$env/static/private';
+import { env } from '$env/dynamic/private';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { createClient } from '@supabase/supabase-js';
 import { sendMessage } from '$lib/server/sinch';
 
 // export const config = {
@@ -11,6 +14,9 @@ import { sendMessage } from '$lib/server/sinch';
 const client = new OpenAI({
 	apiKey: OPENAI_API_KEY
 });
+
+// Create Supabase client for server-side operations
+const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
 const VERIFIED_VENDORS = [
 	{
@@ -160,8 +166,43 @@ export const POST: RequestHandler = async ({ request }) => {
                 `Hi ${vendorName}, here is a new damage report for ${vendorTrade}:\n\n${summary}\n\nGenerated at: ${new Date().toISOString()}`;
 
             try {
-                await sendMessage(vendorPhoneNumber, messageBody);
+                await sendMessage(vendorPhoneNumber, messageBody, {
+                    landlordPhone: env.LANDLORD_PHONE_NUMBER || '',
+                    vendorPhone: vendorPhoneNumber,
+                    senderRole: 'system',
+                    workOrderId: null // TODO: add work order id
+                });
                 sentToVendor = true;
+
+                // Create work order in dashboard after successfully sending SMS
+                if (supabase && vendorPhoneNumber) {
+                    try {
+                        const landlordPhone = env.LANDLORD_PHONE_NUMBER || '';
+                        // Normalize phone numbers for consistent matching
+                        const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+                        const normalizedLandlordPhone = normalizePhone(landlordPhone);
+                        const normalizedVendorPhone = normalizePhone(vendorPhoneNumber);
+                        
+                        const { error: workOrderError } = await supabase
+                            .from('work_orders')
+                            .insert({
+                                landlord_phone: normalizedLandlordPhone,
+                                vendor_phone: normalizedVendorPhone,
+                                summary: summary,
+                                status: 'pending'
+                            });
+
+                        if (workOrderError) {
+                            console.error('Failed to create work order:', workOrderError);
+                            // Don't fail the request if work order creation fails
+                        } else {
+                            console.log('Work order created successfully for vendor:', vendorName);
+                        }
+                    } catch (workOrderErr) {
+                        console.error('Error creating work order:', workOrderErr);
+                        // Don't fail the request if work order creation fails
+                    }
+                }
             } catch (error: any) {
                 console.error('Failed to send vendor SMS:', error);
                 sendError = error?.message ?? 'Failed to send vendor SMS';
