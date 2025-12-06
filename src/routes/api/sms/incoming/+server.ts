@@ -3,6 +3,16 @@ import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { addEvent } from '$lib/server/events';
 import { sendMessage } from '$lib/server/sinch';
+import OpenAI from 'openai';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { createClient } from '@supabase/supabase-js';
+import { OPENAI_API_KEY } from '$env/static/private';
+
+const openaiClient = new OpenAI({
+	apiKey: OPENAI_API_KEY
+});
+
+const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
 const landlordNumber = env.LANDLORD_PHONE_NUMBER;
 const vendorNumber = env.VENDOR_PHONE_NUMBER;
