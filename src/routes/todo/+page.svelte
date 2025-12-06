@@ -11,6 +11,9 @@
 	  Status: 'not started' | 'in progress' | 'done';
 	};
 
+
+	const user = $derived($page?.state?.user ?? null);
+	$inspect(user);
 	let message_ids = $state(["19af0166ea24351a"]);
 	let messages = $state<any[]>([]);
 	let todos = $state<TodoRow[]>([]);
@@ -152,11 +155,11 @@
   {/each}
 {/if}
 
-<div class="mt-3 font-semibold text-xs">TODOs</div>
+<div class="mt-3 font-semibold text-4xl">TODOs</div>
 
 {#if todos.length}
   {#each todos as todo}
-    <div class="text-[8px] text-black">
+    <div class="text-4xl text-black">
       {todo.Unit ?? 'Unknown unit'} ·
       {todo.Address ?? 'Unknown address'} ·
       {todo.Problem} ·
@@ -165,5 +168,5 @@
     </div>
   {/each}
 {:else}
-  <div class="text-[8px] text-stone-500">No todos yet</div>
+  <div class="text-4xl text-stone-500">No todos yet</div>
 {/if}
