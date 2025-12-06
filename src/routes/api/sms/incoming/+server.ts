@@ -6,6 +6,7 @@ import { sendMessage } from '$lib/server/sinch';
 
 const landlordNumber = env.LANDLORD_PHONE_NUMBER;
 const vendorNumber = env.VENDOR_PHONE_NUMBER;
+const sinchFromNumber = env.SINCH_FROM_NUMBER;
 
 interface SinchIncomingSms {
     body: string;
@@ -32,31 +33,48 @@ export const POST: RequestHandler = async ({ request }) => {
     const fromNorm = normalize(payload.from);
     const landlordNorm = normalize(landlordNumber);
     const vendorNorm = normalize(vendorNumber);
+    const sinchFromNorm = normalize(sinchFromNumber);
 
     console.log('🔔 Inbound SMS from Sinch:', payload);
 
     console.log('📞 Normalized numbers:', {
         fromNorm,
         landlordNorm,
-        vendorNorm
+        vendorNorm,
+        sinchFromNorm
     });
 
     if (!landlordNorm || !vendorNorm) {
-        console.warn('🚫 LANDLORD_NUMBER or VENDOR_NUMBER missing in env, skipping forward');
-    } else if (fromNorm !== landlordNorm) {
-        console.log(
-            `➡️  Inbound SMS is NOT from landlord; ignoring for forward. fromNorm=${fromNorm}, landlordNorm=${landlordNorm}`
-        );
-    } else {
-        const forwardBody = `Work request from ${payload.from}:\n${payload.body ?? ''}`;
-        console.log('📤 Forwarding to vendor with body:', forwardBody);
+        console.warn('🚫 LANDLORD_PHONE_NUMBER or VENDOR_PHONE_NUMBER missing in env, skipping forward');
+    } else if (fromNorm === landlordNorm) {
+        // 📩 Message from landlord → forward to vendor
+        const forwardBody = `Work request from landlord ${payload.from}:\n${payload.body ?? ''}`;
+        console.log('📤 Forwarding landlord message to vendor with body:', forwardBody);
 
         try {
             await sendMessage(vendorNumber!, forwardBody);
-            console.log('✅ Forwarded to vendor successfully');
+            console.log('✅ Forwarded landlord message to vendor successfully');
         } catch (err) {
-            console.error('❌ Failed to forward to vendor:', err);
+            console.error('❌ Failed to forward landlord message to vendor:', err);
         }
+    } else if (fromNorm === vendorNorm) {
+        // 📩 Message from vendor → forward to landlord
+        const forwardBody = `Update from vendor ${payload.from}:\n${payload.body ?? ''}`;
+        console.log('📤 Forwarding vendor message to landlord with body:', forwardBody);
+
+        try {
+            await sendMessage(landlordNumber!, forwardBody);
+            console.log('✅ Forwarded vendor message to landlord successfully');
+        } catch (err) {
+            console.error('❌ Failed to forward vendor message to landlord:', err);
+        }
+    } else if (sinchFromNorm && fromNorm === sinchFromNorm) {
+        // Just in case Sinch ever posts something that looks like it's from your own number
+        console.log('ℹ️ Ignoring message from our own Sinch number');
+    } else {
+        console.log(
+            `ℹ️ Inbound SMS from unknown number ${payload.from} (normalized ${fromNorm}); not forwarding`
+        );
     }
 
     return new Response(JSON.stringify({ status: 'ok' }), {
