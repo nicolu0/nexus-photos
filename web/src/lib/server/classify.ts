@@ -16,15 +16,12 @@ export interface WorkOrderCandidate {
     created_at?: string | null;
 }
 
-<<<<<<< HEAD:web/src/lib/server/classify.ts
 export interface ConversationMessage {
     sender_role: 'landlord' | 'vendor' | 'system';
     created_at: string;
     body: string;
 }
 
-=======
->>>>>>> 0edf939 (feat: system prompt changes):src/lib/server/openai.ts
 export interface VendorSmsClassification {
     category: VendorSmsCategory;
     confidence?: number;
@@ -33,15 +30,7 @@ export interface VendorSmsClassification {
     work_order_confidence?: number;
 }
 
-export async function classifyVendorSms(
-    body: string,
-<<<<<<< HEAD:web/src/lib/server/classify.ts
-    candidates: WorkOrderCandidate[],
-    recentMessages: ConversationMessage[]
-=======
-    candidates: WorkOrderCandidate[]
->>>>>>> 0edf939 (feat: system prompt changes):src/lib/server/openai.ts
-): Promise<VendorSmsClassification> {
+export async function classifyVendorSms( body: string, candidates: WorkOrderCandidate[], recentMessages: ConversationMessage[]): Promise<VendorSmsClassification> {
     const trimmed = body.trim();
 
     if (!trimmed) {
@@ -66,13 +55,9 @@ export async function classifyVendorSms(
             'communicating with a landlord about repair or maintenance work orders.\n\n' +
             'You are given:\n' +
             '- One vendor SMS message.\n' +
-<<<<<<< HEAD:web/src/lib/server/classify.ts
             '- A small JSON array of candidate work orders for this vendor/landlord.\n' +
             '- A short recent conversation history between this landlord and vendor, ' +
             '  including `sender_role`, `created_at`, and `body`.\n\n' +
-=======
-            '- A small JSON array of candidate work orders for this vendor/landlord.\n\n' +
->>>>>>> 0edf939 (feat: system prompt changes):src/lib/server/openai.ts
             'First, classify the SMS into one of:\n' +
             '- "confirmation": The vendor is clearly accepting, agreeing to, or scheduling ' +
             '  the work (e.g., "I can come on Friday", "I will fix this tomorrow", ' +
@@ -82,12 +67,8 @@ export async function classifyVendorSms(
             '- "other": Questions, price discussions, unclear messages, partial updates, or ' +
             '  anything that is not clearly confirmation or completion.\n\n' +
             'Second, decide which ONE candidate work order (if any) this SMS is most likely ' +
-<<<<<<< HEAD:web/src/lib/server/classify.ts
             'about. Use clues like unit number, property name, type of work, timing, wording, ' +
             'and the recent conversation context.\n' +
-=======
-            'about. Use clues like unit number, property name, type of work, timing, and wording.\n' +
->>>>>>> 0edf939 (feat: system prompt changes):src/lib/server/openai.ts
             '- If no candidate seems like a reasonable match, set work_order_id to null and ' +
             '  work_order_confidence to a low value (e.g. 0.0 or 0.1).\n\n' +
             'Always be conservative. If it is very ambiguous which work order is referenced, ' +
@@ -102,14 +83,11 @@ export async function classifyVendorSms(
                             'Vendor SMS:\n' +
                             trimmed +
                             '\n\nCandidate work orders (JSON array):\n' +
-<<<<<<< HEAD:web/src/lib/server/classify.ts
                             JSON.stringify(candidates, null, 2) +
                             '\n\nRecent conversation between landlord and vendor ' +
                             '(oldest first, most recent last):\n' +
-                            JSON.stringify(recentMessages, null, 2)
-=======
+                            JSON.stringify(recentMessages, null, 2) +
                             JSON.stringify(candidates, null, 2)
->>>>>>> 0edf939 (feat: system prompt changes):src/lib/server/openai.ts
                     }
                 ]
             }
