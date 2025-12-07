@@ -57,7 +57,7 @@
 				const userEmail = signInData.user?.email ?? email;
 				successMessage = `Signed in as ${userEmail}. Redirecting...`;
 				closeModal();
-				await goto('/todo', {
+				await goto('/workorders', {
 					state: { user: signInData }
 				});
 				return;
