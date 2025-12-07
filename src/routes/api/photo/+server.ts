@@ -98,7 +98,7 @@ export const POST: RequestHandler = async ({ request }) => {
 								JSON.stringify(VERIFIED_VENDORS) +
 								'\n\n' +
 								'Task:\n' +
-								'1) Summarize visible damage in <= 5 short bullet points for landlord and vendor.\n' +
+								'1) Summarize visible damage in <= 3 short bullet points for landlord and vendor. Include any additional details (property, unit, etc.)from the landlord if provided.\n' +
 								'2) Decide what kind of vendor is needed to fix the *main* issue.\n' +
 								'3) If an appropriate vendor exists in the list, choose exactly ONE by trade and name.\n' +
 								'4) If no vendor in the list matches, default to "handyman" and "Jose".\n\n' +
