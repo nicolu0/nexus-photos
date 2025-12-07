@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { sendMessage } from '$lib/server/sinch';
-import { classifyVendorSms } from '$lib/server/openai';
+import { classifyVendorSms, type WorkOrderCandidate } from '$lib/server/openai';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 
@@ -22,6 +22,10 @@ interface SinchIncomingSms {
     [key: string]: unknown;
 }
 
+function normalize(num: string | undefined): string {
+    return (num ?? '').replace(/\D/g, '');
+}
+
 export const POST: RequestHandler = async ({ request }) => {
     let payload: SinchIncomingSms;
     try {
@@ -38,6 +42,9 @@ export const POST: RequestHandler = async ({ request }) => {
     const vendorNorm = normalize(vendorNumber);
     const sinchFromNorm = normalize(sinchFromNumber);
 
+    const landlordPhone = landlordNorm || null;
+    const vendorPhone = vendorNorm || null;
+
     const body = payload.body ?? '';
 
     const senderRole: 'landlord' | 'vendor' | 'system' =
@@ -45,23 +52,45 @@ export const POST: RequestHandler = async ({ request }) => {
         fromNorm === vendorNorm ? 'vendor' :
         'system';
 
-    try {
-        await supabase.from('messages').insert({
-            landlord_phone: landlordNorm,
-            vendor_phone: vendorNorm,
-            sender_role: senderRole,
-            direction: 'inbound',
-            body: body,
-            work_order_id: null, // TODO: add work order id
-            received_at: inboundAt
-        })
-    } catch (err) {
-        console.error('Failed to insert inbound message into messages table:', err);
-    }
-
     if (!landlordNorm || !vendorNorm) {
         console.warn('LANDLORD_PHONE_NUMBER or VENDOR_PHONE_NUMBER missing in env, skipping forward');
-    } else if (fromNorm === landlordNorm) {
+
+        try {
+            await supabase.from('messages').insert({
+                landlord_phone: landlordPhone,
+                vendor_phone: vendorPhone,
+                sender_role: 'system',
+                direction: 'inbound',
+                body: body,
+                work_order_id: null,
+                received_at: inboundAt
+            });
+        } catch (err) {
+            console.error('Failed to insert inbound message into messages table (missing env):', err);
+        }
+
+        return new Response(JSON.stringify({ status: 'ok' }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+    
+    if (fromNorm === landlordNorm) {
+        const senderRole: 'landlord' = 'landlord';
+
+        try {
+            await supabase.from('messages').insert({
+                landlord_phone: landlordPhone,
+                vendor_phone: vendorPhone,
+                sender_role: senderRole,
+                direction: 'inbound',
+                body: body,
+                work_order_id: null,
+                received_at: inboundAt
+            });
+        } catch (err) {
+            console.error('Failed to insert inbound message into messages table (landlord):', err);
+        }
+        
         const forwardBody = `Work request from landlord ${payload.from}:\n${body}`;
 
         try {
@@ -74,18 +103,92 @@ export const POST: RequestHandler = async ({ request }) => {
         } catch (err) {
             console.error('Failed to forward landlord message to vendor:', err);
         }
-    } else if (fromNorm === vendorNorm) {
+
+        return new Response(JSON.stringify({ status: 'ok' }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+    
+    if (fromNorm === vendorNorm) {
+        const senderRole: 'vendor' = 'vendor';
+        let workOrderId: string | null = null;
+
+        // get candidates for work orders
+        let candidates: WorkOrderCandidate[] = [];
         try {
-            const classification = await classifyVendorSms(body);
+            const { data, error } = await supabase
+                .from('work_orders')
+                .select('id, summary, status, property_label, unit_label, vendor_name, vendor_trade')
+                .eq('landlord_phone', landlordPhone)
+                .eq('vendor_phone', vendorPhone)
+                .in('status', ['pending', 'in_progress']);
+
+            if (error) {
+                console.error('Failed to fetch work orders for vendor:', error);
+            } else if (data) {
+                candidates = data as WorkOrderCandidate[];
+            }
+        } catch (err) {
+            console.error('Failed to fetch work orders for vendor:', err);
+        }
+        
+        // classify vendor SMS + pick best work order
+        try {
+            const classification = await classifyVendorSms(body, candidates);
 
             console.log('vendor SMS classification:', {
                 sms: body,
                 category: classification.category,
                 confidence: classification.confidence,
-                reasoning: classification.reasoning
+                reasoning: classification.reasoning,
+                work_order_id: classification.work_order_id,
+                work_order_confidence: classification.work_order_confidence
             });
+
+            const threshold = 0.5;
+            if (
+                classification.work_order_id &&
+                (classification.work_order_confidence ?? 0) >= threshold
+            ) {
+                workOrderId = classification.work_order_id;
+
+                if (classification.category === 'confirmation') {
+                    try {
+                        await supabase.from('work_orders')
+                            .update({ status: 'in_progress' })
+                            .eq('id', workOrderId)
+                            .in('status', ['pending', 'in_progress']);
+                    } catch (err) {
+                        console.error('Failed to update work order status to in_progress:', err);
+                    }
+                } else if (classification.category === 'completion') {
+                    try {
+                        await supabase.from('work_orders')
+                            .update({ status: 'completed' })
+                            .eq('id', workOrderId)
+                            .in('status', ['pending', 'in_progress']);
+                    } catch (err) {
+                        console.error('Failed to update work order status to completed:', err);
+                    }
+                }
+            }
         } catch (err) {
             console.error('Failed to classify vendor SMS:', err);
+        }
+
+        // log inbound vendor msg with work order id
+        try {
+            await supabase.from('messages').insert({
+                landlord_phone: landlordPhone,
+                vendor_phone: vendorPhone,
+                sender_role: senderRole,
+                direction: 'inbound',
+                body: body,
+                work_order_id: workOrderId,
+                received_at: inboundAt
+            });
+        } catch (err) {
+            console.error('Failed to insert inbound message into messages table (vendor):', err);
         }
 
         const forwardBody = `Update from vendor ${payload.from}:\n${body}`;
@@ -95,35 +198,37 @@ export const POST: RequestHandler = async ({ request }) => {
                 landlordPhone: landlordNumber ?? null,
                 vendorPhone: vendorNumber ?? null,
                 senderRole: 'vendor',
-                workOrderId: null // TODO: add work order id
+                workOrderId: workOrderId
             });
         } catch (err) {
             console.error('Failed to forward vendor message to landlord:', err);
         }
-    } else if (sinchFromNorm && fromNorm === sinchFromNorm) {
+
+        return new Response(JSON.stringify({ status: 'ok' }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+    
+    if (sinchFromNorm && fromNorm === sinchFromNorm) {
         // Just in case Sinch ever posts something that looks like it's from your own number
         // Ignore message from our own Sinch number
     } else {
-        // Inbound SMS from unknown number; not forwarding
+        try {
+            await supabase.from('messages').insert({
+                landlord_phone: landlordPhone,
+                vendor_phone: vendorPhone,
+                sender_role: 'system',
+                direction: 'inbound',
+                body: body,
+                work_order_id: null,
+                received_at: inboundAt
+            });
+        } catch (err) {
+            console.error('Failed to insert inbound message into messages table:', err);
+        }
     }
 
     return new Response(JSON.stringify({ status: 'ok' }), {
         headers: { 'Content-Type': 'application/json' }
     });
-
-    // if (landlordNumber && vendorNumber && normalize(payload.from) === normalize(landlordNumber)) {
-    //     const forwardBody = `Work request from ${payload.from}:\n${payload.body ?? ''}`;
-
-    //     try {
-    //         await sendMessage(vendorNumber, forwardBody);
-    //     } catch (error) {
-    //         console.error('Failed to forward message to vendor', error);
-    //     }
-    // }
-
-    // return json({ status: 'ok' });
 };
-
-function normalize(num: string | undefined): string {
-    return (num ?? '').replace(/\D/g, '');
-}
