@@ -44,6 +44,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const formData = await request.formData();
 		const file = formData.get('image');
+		const additionalMessage = formData.get('message')?.toString() || '';
 
 		if (!(file instanceof File)) {
 			return json({ error: 'Missing image file "image"' }, { status: 400 });
@@ -162,8 +163,14 @@ export const POST: RequestHandler = async ({ request }) => {
         } else if (!summary.trim()) {
             console.warn('No summary returned from OpenAI, skipping vendor SMS');
         } else {
-            const messageBody =
-                `Hi ${vendorName}, here is a new damage report for ${vendorTrade}:\n\n${summary}\n\nGenerated at: ${new Date().toISOString()}`;
+            // Build message body with optional additional details from landlord
+            let messageBody = `Hi ${vendorName}, here is a new damage report for ${vendorTrade}:\n\n${summary}`;
+            
+            if (additionalMessage.trim()) {
+                messageBody += `\n\nAdditional details:\n${additionalMessage.trim()}`;
+            }
+            
+            messageBody += `\n\nGenerated at: ${new Date().toISOString()}`;
 
             try {
                 await sendMessage(vendorPhoneNumber, messageBody, {
