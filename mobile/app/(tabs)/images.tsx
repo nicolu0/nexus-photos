@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, Modal, ActivityIndicator, Alert, Dimensions } from 'react-native';
+import { View, Text, FlatList, Image, TouchableOpacity, Modal, ActivityIndicator, Alert, Dimensions, TextInput, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useImages, type CapturedImage } from '../../context/ImagesContext';
@@ -13,8 +13,9 @@ export default function ImagesScreen() {
     const insets = useSafeAreaInsets();
     const [selectedImage, setSelectedImage] = useState<CapturedImage | null>(null);
     const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
 
-    async function uploadImageToAPI(imageUri: string) {
+    async function uploadImageToAPI(imageUri: string, additionalMessage?: string) {
         try {
             // Compress and resize image before uploading to avoid 413 errors
             const manipulatedImage = await ImageManipulator.manipulateAsync(
@@ -32,6 +33,11 @@ export default function ImagesScreen() {
                 type: 'image/jpeg',
                 name: fileName,
             } as any);
+            
+            // Add message if provided
+            if (additionalMessage && additionalMessage.trim()) {
+                formData.append('message', additionalMessage.trim());
+            }
 
             // Make API call
             // Note: Don't set Content-Type header - React Native will set it automatically with boundary
@@ -113,8 +119,9 @@ export default function ImagesScreen() {
 
         setLoading(true);
         try {
-            await uploadImageToAPI(selectedImage.uri);
+            await uploadImageToAPI(selectedImage.uri, message);
             setSelectedImage(null);
+            setMessage(''); // Clear message after sending
         } catch (error: any) {
             Alert.alert('Error', error?.message ?? 'Failed to send image. Please try again.');
         } finally {
@@ -122,8 +129,8 @@ export default function ImagesScreen() {
         }
     }
 
-    // Calculate image dimensions: 50% of screen height with 4:3 aspect ratio
-    const imageHeight = SCREEN_HEIGHT * 0.5;
+    // Calculate image dimensions: 30% of screen height with 4:3 aspect ratio
+    const imageHeight = SCREEN_HEIGHT * 0.3;
     let imageWidth = (imageHeight * 4) / 3; // 4:3 aspect ratio
     
     // Ensure image fits within screen width (accounting for modal padding)
@@ -169,44 +176,76 @@ export default function ImagesScreen() {
                 visible={selectedImage !== null}
                 transparent={true}
                 animationType="fade"
-                onRequestClose={() => setSelectedImage(null)}
+                onRequestClose={() => {
+                    setSelectedImage(null);
+                    setMessage('');
+                }}
             >
-                <View className="flex-1 bg-black/80 justify-center items-center px-4">
-                    <View className="bg-slate-900 rounded-2xl p-6 w-full items-center">
-                        {selectedImage && (
-                            <>
-                                <View className="items-center mb-6" style={{ width: '100%' }}>
-                                    <Image
-                                        source={{ uri: selectedImage.uri }}
-                                        style={{ width: imageWidth, height: imageHeight, maxWidth: '100%' }}
-                                        resizeMode="contain"
-                                    />
-                                </View>
-                                <TouchableOpacity
-                                    onPress={handleSendToVendor}
-                                    disabled={loading}
-                                    className="bg-indigo-500 rounded-lg px-6 py-3 items-center w-full active:bg-indigo-400 disabled:opacity-50"
-                                >
-                                    {loading ? (
-                                        <ActivityIndicator size="small" color="#ffffff" />
-                                    ) : (
-                                        <Text className="text-white text-base font-semibold">
-                                            Send to Vendor
-                                        </Text>
-                                    )}
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setSelectedImage(null)}
-                                    className="mt-3 bg-slate-700 rounded-lg px-6 py-3 items-center w-full active:bg-slate-600"
-                                >
-                                    <Text className="text-white text-base font-semibold">
-                                        Cancel
-                                    </Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    className="flex-1"
+                >
+                    <View className="flex-1 bg-black/80 justify-center items-center px-4">
+                        <ScrollView
+                            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <View className="bg-slate-900 rounded-2xl p-6 w-full items-center">
+                                {selectedImage && (
+                                    <>
+                                        <View className="items-center mb-4" style={{ width: '100%' }}>
+                                            <Image
+                                                source={{ uri: selectedImage.uri }}
+                                                style={{ width: imageWidth, height: imageHeight, maxWidth: '100%' }}
+                                                resizeMode="contain"
+                                            />
+                                        </View>
+                                        <View className="w-full mb-4">
+                                            <Text className="text-slate-300 text-sm font-medium mb-2">
+                                                Additional Details (Optional)
+                                            </Text>
+                                            <TextInput
+                                                className="bg-slate-800 text-white rounded-lg px-4 py-3 text-base border border-slate-700"
+                                                placeholder="e.g., Unit 302, Property: 123 Main St..."
+                                                placeholderTextColor="#94a3b8"
+                                                value={message}
+                                                onChangeText={setMessage}
+                                                multiline
+                                                numberOfLines={3}
+                                                textAlignVertical="top"
+                                                editable={!loading}
+                                            />
+                                        </View>
+                                        <TouchableOpacity
+                                            onPress={handleSendToVendor}
+                                            disabled={loading}
+                                            className="bg-indigo-500 rounded-lg px-6 py-3 items-center w-full active:bg-indigo-400 disabled:opacity-50"
+                                        >
+                                            {loading ? (
+                                                <ActivityIndicator size="small" color="#ffffff" />
+                                            ) : (
+                                                <Text className="text-white text-base font-semibold">
+                                                    Send to Vendor
+                                                </Text>
+                                            )}
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setSelectedImage(null);
+                                                setMessage('');
+                                            }}
+                                            className="mt-3 bg-slate-700 rounded-lg px-6 py-3 items-center w-full active:bg-slate-600"
+                                        >
+                                            <Text className="text-white text-base font-semibold">
+                                                Cancel
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+                            </View>
+                        </ScrollView>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );
