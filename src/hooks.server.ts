@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import type { Handle } from '@sveltejs/kit';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import schedule from 'node-schedule';
 
 export const handle: Handle = async ({ event, resolve }) => {
   const supabase = createServerClient(
@@ -18,8 +19,6 @@ export const handle: Handle = async ({ event, resolve }) => {
   );
 
   event.locals.supabase = supabase;
-
-  event.locals.test = "hello";
 
   const {data: { session }} = await supabase.auth.getSession();
 

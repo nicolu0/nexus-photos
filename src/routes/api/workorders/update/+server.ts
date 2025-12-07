@@ -1,7 +1,6 @@
-// src/routes/api/email2row/+server.ts
 import OpenAI from 'openai';
 import { json } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
+import type { RequestHandler } from '../../workorders/$types';
 import { OPENAI_API_KEY } from '$env/static/private';
 
 const client = new OpenAI({

@@ -41,6 +41,7 @@
 		"@supabase/ssr": "^0.8.0",
 		"@supabase/supabase-js": "^2.86.0",
 		"gsap": "^3.13.0",
+		"node-schedule": "^2.1.1",
 		"openai": "^6.9.1",
 		"simplex-noise": "^4.0.3",
 		"three": "^0.181.2",

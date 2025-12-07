@@ -12,78 +12,11 @@
 	};
 
 	const user = $derived($page.data.user);
-	$inspect(user);
 
 	let message_ids = $state(["19af0166ea24351a"]);
 	let messages = $state<any[]>([]);
 	let workorders = $state<TodoRow[]>([]);
-	let hasTokens = $state(false);
-
-	async function checkTokens(){
-		const { data, error } = await supabase
-			.from('gmail_tokens')
-			.select('expiration')
-			.eq('user_id', user.id)
-			.maybeSingle();
-		if(error) console.log('error: ', error);
-		const exists = !!data && !error;
-		return exists;
-	}
-
-    // function decodeBase64Url(data) {
-    //   if (!data) return '';
-    //   const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
-    //   const decoded = atob(base64);
-    //   try {
-    //     return decodeURIComponent(escape(decoded));
-    //   } catch {
-    //     return decoded;
-    //   }
-    // }
-
-    // function extractTextFromPayload(payload) {
-    //   const textParts = [];
-    //   const htmlParts = [];
-    //
-    //   function walk(part) {
-    //     if (!part) return;
-    //
-    //     if (part.mimeType === 'text/plain' && part.body?.data) {
-    //       textParts.push(decodeBase64Url(part.body.data));
-    //     } else if (part.mimeType === 'text/html' && part.body?.data) {
-    //       htmlParts.push(decodeBase64Url(part.body.data));
-    //     }
-    //
-    //     if (part.parts) {
-    //       part.parts.forEach(walk);
-    //     }
-    //   }
-    //
-    //   walk(payload);
-    //
-    //   return {
-    //     text: textParts.join('\n\n'),
-    //     html: htmlParts.length ? htmlParts.join('\n\n') : null
-    //   };
-    // }
-
-    // function simplifyMessage(msg) {
-    //   const headers = msg.payload?.headers ?? [];
-    //   const getHeader = (name) =>
-    //     headers.find((h) => h.name === name)?.value ?? '';
-    //
-    //   const { text, html } = extractTextFromPayload(msg.payload);
-    //
-    //   return {
-    //     id: msg.id,
-    //     subject: getHeader('Subject'),
-    //     from: getHeader('From'),
-    //     to: getHeader('To'),
-    //     date: getHeader('Date'),
-    //     text
-    //   };
-    // }
-
+	let tokensOK = $state($page.data.tokensOK);
 
 	// async function loadMessageIDs() {
 	// 	try {
@@ -144,12 +77,11 @@
 	// }
 
 	onMount(()=>{
-		checkTokens().then((r) => {hasTokens = r;});
 		//update workorders if tokens are good
 	});
 </script>
 
-{#if !hasTokens}
+{#if !tokensOK}
 	<a href="/api/oauth/google" class="text-blue-400 underline">connect gmail</a>
 {/if}
 
