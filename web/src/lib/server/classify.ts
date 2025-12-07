@@ -16,6 +16,12 @@ export interface WorkOrderCandidate {
     created_at?: string | null;
 }
 
+export interface ConversationMessage {
+    sender_role: 'landlord' | 'vendor' | 'system';
+    created_at: string;
+    body: string;
+}
+
 export interface VendorSmsClassification {
     category: VendorSmsCategory;
     confidence?: number;
@@ -26,7 +32,8 @@ export interface VendorSmsClassification {
 
 export async function classifyVendorSms(
     body: string,
-    candidates: WorkOrderCandidate[]
+    candidates: WorkOrderCandidate[],
+    recentMessages: ConversationMessage[]
 ): Promise<VendorSmsClassification> {
     const trimmed = body.trim();
 
@@ -40,6 +47,8 @@ export async function classifyVendorSms(
         };
     }
 
+    const messages = recentMessages.slice(-5);
+
     const response = await openaiClient.responses.create({
         model: 'gpt-5-nano-2025-08-07',
         instructions:
@@ -47,7 +56,9 @@ export async function classifyVendorSms(
             'communicating with a landlord about repair or maintenance work orders.\n\n' +
             'You are given:\n' +
             '- One vendor SMS message.\n' +
-            '- A small JSON array of candidate work orders for this vendor/landlord.\n\n' +
+            '- A small JSON array of candidate work orders for this vendor/landlord.\n' +
+            '- A short recent conversation history between this landlord and vendor, ' +
+            '  including `sender_role`, `created_at`, and `body`.\n\n' +
             'First, classify the SMS into one of:\n' +
             '- "confirmation": The vendor is clearly accepting, agreeing to, or scheduling ' +
             '  the work (e.g., "I can come on Friday", "I will fix this tomorrow", ' +
@@ -57,7 +68,8 @@ export async function classifyVendorSms(
             '- "other": Questions, price discussions, unclear messages, partial updates, or ' +
             '  anything that is not clearly confirmation or completion.\n\n' +
             'Second, decide which ONE candidate work order (if any) this SMS is most likely ' +
-            'about. Use clues like unit number, property name, type of work, timing, and wording.\n' +
+            'about. Use clues like unit number, property name, type of work, timing, wording, ' +
+            'and the recent conversation context.\n' +
             '- If no candidate seems like a reasonable match, set work_order_id to null and ' +
             '  work_order_confidence to a low value (e.g. 0.0 or 0.1).\n\n' +
             'Always be conservative. If it is very ambiguous which work order is referenced, ' +
@@ -72,7 +84,10 @@ export async function classifyVendorSms(
                             'Vendor SMS:\n' +
                             trimmed +
                             '\n\nCandidate work orders (JSON array):\n' +
-                            JSON.stringify(candidates, null, 2)
+                            JSON.stringify(candidates, null, 2) +
+                            '\n\nRecent conversation between landlord and vendor ' +
+                            '(oldest first, most recent last):\n' +
+                            JSON.stringify(messages, null, 2)
                     }
                 ]
             }
