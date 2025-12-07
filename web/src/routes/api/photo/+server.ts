@@ -50,25 +50,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Missing image file "image"' }, { status: 400 });
 		}
 
-		// Convert uploaded File -> base64 data URL
 		const arrayBuffer = await file.arrayBuffer();
 		const buffer = Buffer.from(arrayBuffer);
 		const base64 = buffer.toString('base64');
         const dataUrl = `data:${file.type || 'image/jpeg'};base64,${base64}`;
-
-        
-		/**
-		const { imageBase64, mimeType } = (await request.json()) as {
-            imageBase64?: string;
-            mimeType?: string;
-        };
-
-        if (!imageBase64 || typeof imageBase64 !== 'string') {
-            return json({ error: 'Missing or invalid "imageBase64"' }, { status: 400 });
-        }
-
-        const dataUrl = `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`;
-		**/
 
 		const response = await client.responses.create({
 			model: 'gpt-5-nano-2025-08-07',
@@ -89,22 +74,43 @@ export const POST: RequestHandler = async ({ request }) => {
 						{
 							type: 'input_image',
 							image_url: dataUrl,
-							detail: 'low' // or "low" if you want cheaper/rougher analysis :contentReference[oaicite:0]{index=0}
+							detail: 'low'
 						},
 						{
 							type: 'input_text',
 							text:
 								'You also have a list of verified vendors (JSON below):\n' +
-								JSON.stringify(VERIFIED_VENDORS) +
-								'\n\n' +
+								JSON.stringify(VERIFIED_VENDORS)
+                        },
+                        {
+                            type: 'input_text',
+                            text:
+                                'The landlord also provided this extra text/note (may include property or unit info):\n' +
+                                (additionalMessage || '[no extra message provided]')
+                        },
+                        {
+                            type: 'input_text',
+                            text:
 								'Task:\n' +
-								'1) Summarize visible damage in <= 3 short bullet points for landlord and vendor. Include any additional details (property, unit, etc.)from the landlord if provided.\n' +
-								'2) Decide what kind of vendor is needed to fix the *main* issue.\n' +
-								'3) If an appropriate vendor exists in the list, choose exactly ONE by trade and name.\n' +
-								'4) If no vendor in the list matches, default to "handyman" and "Jose".\n\n' +
-								'Rules:\n' +
-								'- If there is NO visible damage: explanation = "No visible damage in this photo." and trade = null and name = null.\n' +
-								'- Do NOT mention anything ambiguous or not clearly visible.\n'
+                                '1) Summarize visible damage in <= 3 short bullet points for landlord and vendor. ' +
+                                '   If the landlord text clearly mentions a property nickname (e.g. "Bellevue", "Mariposa", "Lincoln") or address, ' +
+                                '   and/or a unit (e.g. "Unit 302", "#302", "302"), include that info in your structured output.\n' +
+                                '2) Decide what kind of vendor is needed to fix the *main* issue.\n' +
+                                '3) If an appropriate vendor exists in the list, choose exactly ONE by trade and name.\n' +
+                                '4) If no vendor in the list matches, default to "handyman" and "Jose".\n\n' +
+                                'Structured fields:\n' +
+                                '- summary: damage summary (1-3 bullet points, plain text, not Markdown).\n' +
+                                '- trade: string like "plumber", "electrician", or null if no visible damage.\n' +
+                                '- name: vendor name from the list (e.g. "Mario and Luigi"), or null if no visible damage.\n' +
+                                '- property_label: short human name for the property (e.g. "Bellevue", "123 Example St"), ' +
+                                '  based on the landlord message if possible; otherwise null.\n' +
+                                '- unit_label: short label for the unit (e.g. "Unit 302", "302", "#4"), based on the landlord ' +
+                                '  message if possible; otherwise null.\n\n' +
+                                'Rules:\n' +
+                                '- If there is NO visible damage: summary = "No visible damage in this photo.", ' +
+                                '  trade = null, name = null.\n' +
+                                '- If you cannot confidently extract property or unit info, set property_label and unit_label to null.\n' +
+                                '- Do NOT mention anything ambiguous or not clearly visible.'
 						}
 					]
 				}
@@ -119,9 +125,11 @@ export const POST: RequestHandler = async ({ request }) => {
 						properties: {
 							summary: { type: 'string' },
 							trade: { type: ['string', 'null'] },
-							name: { type: ['string', 'null'] }
+							name: { type: ['string', 'null'] },
+                            property_label: { type: ['string', 'null'] },
+                            unit_label: { type: ['string', 'null'] }
 						},
-						required: ['summary', 'trade', 'name'],
+						required: ['summary', 'trade', 'name', 'property_label', 'unit_label'],
 						additionalProperties: false
 					}
 				}
@@ -131,8 +139,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const outputText = response.output_text ?? '';
 		
-		// Parse the JSON response from OpenAI
-		let parsedResponse: { summary: string; trade: string | null; name: string | null };
+		let parsedResponse: {
+            summary: string;
+            trade: string | null;
+            name: string | null;
+            property_label: string | null;
+            unit_label: string | null;
+        };
+
 		try {
 			parsedResponse = JSON.parse(outputText);
 		} catch (error) {
@@ -143,6 +157,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		const summary = parsedResponse.summary ?? '';
 		const vendorName = parsedResponse.name;
 		const vendorTrade = parsedResponse.trade;
+        const propertyLabel = parsedResponse.property_label ?? null;
+        const unitLabel = parsedResponse.unit_label ?? null;
         
         let sentToVendor = false;
         let sendError: string | null = null;
@@ -165,58 +181,76 @@ export const POST: RequestHandler = async ({ request }) => {
         } else {
             // Build message body with optional additional details from landlord
             let messageBody = `Hi ${vendorName}, here is a new damage report for ${vendorTrade}:\n\n${summary}`;
+
+            if (propertyLabel || unitLabel) {
+                messageBody += `\n\nLocation: `;
+                if (propertyLabel) messageBody += propertyLabel;
+                if (propertyLabel && unitLabel) messageBody += ' - ';
+                if (unitLabel) messageBody += unitLabel;
+            }
             
             if (additionalMessage.trim()) {
-                messageBody += `\n\nAdditional details:\n${additionalMessage.trim()}`;
+                messageBody += `\n\nAdditional details from landlord:\n${additionalMessage.trim()}`;
             }
             
             messageBody += `\n\nGenerated at: ${new Date().toISOString()}`;
 
             try {
+                const landlordPhone = env.LANDLORD_PHONE_NUMBER || '';
+
+                const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+                const normalizedLandlordPhone = normalizePhone(landlordPhone);
+                const normalizedVendorPhone = normalizePhone(vendorPhoneNumber);
+                
+                let workOrderId: string | null = null;
+                try {
+                    const { data, error: workOrderError } = await supabase
+                        .from('work_orders')
+                        .insert({
+                            landlord_phone: normalizedLandlordPhone,
+                            vendor_phone: normalizedVendorPhone,
+                            summary: summary,
+                            status: 'pending',
+                            property_label: propertyLabel,
+                            unit_label: unitLabel,
+                            vendor_name: vendorName,
+                            vendor_trade: vendorTrade
+                        })
+                        .select('id')
+                        .single();
+
+                    if (workOrderError) {
+                        console.error('Failed to create work order:', workOrderError);
+                    } else {
+                        workOrderId = data?.id ?? null;
+                        console.log('Work order created successfully for vendor:', vendorName, 'with ID:', workOrderId);
+                    }
+                } catch (workOrderError) {
+                    console.error('Failed to create work order:', workOrderError);
+                }
+
                 await sendMessage(vendorPhoneNumber, messageBody, {
-                    landlordPhone: env.LANDLORD_PHONE_NUMBER || '',
-                    vendorPhone: vendorPhoneNumber,
+                    landlordPhone: normalizedLandlordPhone,
+                    vendorPhone: normalizedVendorPhone,
                     senderRole: 'system',
-                    workOrderId: null // TODO: add work order id
+                    workOrderId: workOrderId
                 });
                 sentToVendor = true;
-
-                // Create work order in dashboard after successfully sending SMS
-                if (supabase && vendorPhoneNumber) {
-                    try {
-                        const landlordPhone = env.LANDLORD_PHONE_NUMBER || '';
-                        // Normalize phone numbers for consistent matching
-                        const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
-                        const normalizedLandlordPhone = normalizePhone(landlordPhone);
-                        const normalizedVendorPhone = normalizePhone(vendorPhoneNumber);
-                        
-                        const { error: workOrderError } = await supabase
-                            .from('work_orders')
-                            .insert({
-                                landlord_phone: normalizedLandlordPhone,
-                                vendor_phone: normalizedVendorPhone,
-                                summary: summary,
-                                status: 'pending'
-                            });
-
-                        if (workOrderError) {
-                            console.error('Failed to create work order:', workOrderError);
-                            // Don't fail the request if work order creation fails
-                        } else {
-                            console.log('Work order created successfully for vendor:', vendorName);
-                        }
-                    } catch (workOrderErr) {
-                        console.error('Error creating work order:', workOrderErr);
-                        // Don't fail the request if work order creation fails
-                    }
-                }
             } catch (error: any) {
                 console.error('Failed to send vendor SMS:', error);
                 sendError = error?.message ?? 'Failed to send vendor SMS';
             }
         }
         
-		return json({ summary, sentToVendor, sendError, name: vendorName, trade: vendorTrade });
+		return json({
+            summary,
+            sentToVendor,
+            sendError,
+            name: vendorName,
+            trade: vendorTrade,
+            property_label: propertyLabel,
+            unit_label: unitLabel
+        });
 		
 	} catch (error) {
 		console.error('Damage check error:', error);
