@@ -36,6 +36,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const inboundAt = payload.received_at ?? new Date().toISOString();
+    const body = payload.body ?? '';
 
     const fromNorm = normalize(payload.from);
     const landlordNorm = normalize(landlordNumber);
@@ -45,52 +46,71 @@ export const POST: RequestHandler = async ({ request }) => {
     const landlordPhone = landlordNorm || null;
     const vendorPhone = vendorNorm || null;
 
-    const body = payload.body ?? '';
+    console.log('Incoming SMS from Sinch:', {
+        from: payload.from,
+        to: payload.to,
+        fromNorm,
+        landlordNorm,
+        vendorNorm,
+        sinchFromNorm,
+        body
+    });
 
-    const senderRole: 'landlord' | 'vendor' | 'system' =
-        fromNorm === landlordNorm ? 'landlord' :
-        fromNorm === vendorNorm ? 'vendor' :
-        'system';
-
+    // If env is misconfigured, just log the inbound as "system" and bail
     if (!landlordNorm || !vendorNorm) {
         console.warn('LANDLORD_PHONE_NUMBER or VENDOR_PHONE_NUMBER missing in env, skipping forward');
 
         try {
-            await supabase.from('messages').insert({
+            const { error } = await supabase.from('messages').insert({
                 landlord_phone: landlordPhone,
                 vendor_phone: vendorPhone,
                 sender_role: 'system',
                 direction: 'inbound',
-                body: body,
+                body,
                 work_order_id: null,
-                received_at: inboundAt
             });
+
+            if (error) {
+                console.error(
+                    'Failed to insert inbound message into messages table (missing env):',
+                    error
+                );
+            }
         } catch (err) {
-            console.error('Failed to insert inbound message into messages table (missing env):', err);
+            console.error('Unexpected error inserting inbound message (missing env):', err);
         }
 
         return new Response(JSON.stringify({ status: 'ok' }), {
             headers: { 'Content-Type': 'application/json' }
         });
     }
-    
+
+    // --- Branch: Landlord -> Vendor ---
     if (fromNorm === landlordNorm) {
         const senderRole: 'landlord' = 'landlord';
 
+        // 1) Log inbound landlord message
         try {
-            await supabase.from('messages').insert({
+            const { error } = await supabase.from('messages').insert({
                 landlord_phone: landlordPhone,
                 vendor_phone: vendorPhone,
                 sender_role: senderRole,
                 direction: 'inbound',
-                body: body,
+                body,
                 work_order_id: null,
-                received_at: inboundAt
             });
+
+            if (error) {
+                console.error(
+                    'Failed to insert inbound landlord message into messages table:',
+                    error
+                );
+            }
         } catch (err) {
-            console.error('Failed to insert inbound message into messages table (landlord):', err);
+            console.error('Unexpected error inserting inbound landlord message:', err);
         }
-        
+
+        // 2) Forward to vendor
         const forwardBody = `Work request from landlord ${payload.from}:\n${body}`;
 
         try {
@@ -98,7 +118,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 landlordPhone: landlordNumber ?? null,
                 vendorPhone: vendorNumber ?? null,
                 senderRole: 'landlord',
-                workOrderId: null // TODO: add work order id
+                workOrderId: null // you can wire this later if the landlord text is tied to a specific work order
             });
         } catch (err) {
             console.error('Failed to forward landlord message to vendor:', err);
@@ -108,35 +128,36 @@ export const POST: RequestHandler = async ({ request }) => {
             headers: { 'Content-Type': 'application/json' }
         });
     }
-    
+
+    // --- Branch: Vendor -> Landlord ---
     if (fromNorm === vendorNorm) {
         const senderRole: 'vendor' = 'vendor';
         let workOrderId: string | null = null;
 
-        // get candidates for work orders
+        // 1) Get candidate work orders for this landlord+vendor with status pending/in_progress
         let candidates: WorkOrderCandidate[] = [];
         try {
             const { data, error } = await supabase
                 .from('work_orders')
-                .select('id, summary, status, property_label, unit_label, vendor_name, vendor_trade')
+                .select('id, summary, status, property_label, unit_label, created_at')
                 .eq('landlord_phone', landlordPhone)
                 .eq('vendor_phone', vendorPhone)
                 .in('status', ['pending', 'in_progress']);
 
             if (error) {
-                console.error('Failed to fetch work orders for vendor:', error);
+                console.error('Failed to fetch work_orders candidates for vendor:', error);
             } else if (data) {
                 candidates = data as WorkOrderCandidate[];
             }
         } catch (err) {
-            console.error('Failed to fetch work orders for vendor:', err);
+            console.error('Unexpected error fetching work_orders candidates for vendor:', err);
         }
-        
-        // classify vendor SMS + pick best work order
+
+        // 2) Classify vendor SMS + choose best work order
         try {
             const classification = await classifyVendorSms(body, candidates);
 
-            console.log('vendor SMS classification:', {
+            console.log('Vendor SMS classification:', {
                 sms: body,
                 category: classification.category,
                 confidence: classification.confidence,
@@ -145,7 +166,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 work_order_confidence: classification.work_order_confidence
             });
 
-            const threshold = 0.5;
+            const threshold = 0.5; // bump up if you want to be more conservative
             if (
                 classification.work_order_id &&
                 (classification.work_order_confidence ?? 0) >= threshold
@@ -154,43 +175,84 @@ export const POST: RequestHandler = async ({ request }) => {
 
                 if (classification.category === 'confirmation') {
                     try {
-                        await supabase.from('work_orders')
+                        const { error } = await supabase
+                            .from('work_orders')
                             .update({ status: 'in_progress' })
                             .eq('id', workOrderId)
                             .in('status', ['pending', 'in_progress']);
+
+                        if (error) {
+                            console.error(
+                                'Failed to update work order status → in_progress:',
+                                error
+                            );
+                        } else {
+                            console.log(
+                                `Work order ${workOrderId} updated to 'in_progress' based on vendor SMS`
+                            );
+                        }
                     } catch (err) {
-                        console.error('Failed to update work order status to in_progress:', err);
+                        console.error(
+                            'Unexpected error updating work order status → in_progress:',
+                            err
+                        );
                     }
                 } else if (classification.category === 'completion') {
                     try {
-                        await supabase.from('work_orders')
+                        const { error } = await supabase
+                            .from('work_orders')
                             .update({ status: 'completed' })
                             .eq('id', workOrderId)
                             .in('status', ['pending', 'in_progress']);
+
+                        if (error) {
+                            console.error(
+                                'Failed to update work order status → completed:',
+                                error
+                            );
+                        } else {
+                            console.log(
+                                `Work order ${workOrderId} updated to 'completed' based on vendor SMS`
+                            );
+                        }
                     } catch (err) {
-                        console.error('Failed to update work order status to completed:', err);
+                        console.error(
+                            'Unexpected error updating work order status → completed:',
+                            err
+                        );
                     }
                 }
+            } else {
+                console.log(
+                    'No confident work_order match; leaving work_order_id = null for this vendor message'
+                );
             }
         } catch (err) {
             console.error('Failed to classify vendor SMS:', err);
         }
 
-        // log inbound vendor msg with work order id
+        // 3) Log inbound vendor message with attached work_order_id (if any)
         try {
-            await supabase.from('messages').insert({
+            const { error } = await supabase.from('messages').insert({
                 landlord_phone: landlordPhone,
                 vendor_phone: vendorPhone,
                 sender_role: senderRole,
                 direction: 'inbound',
-                body: body,
+                body,
                 work_order_id: workOrderId,
-                received_at: inboundAt
             });
+
+            if (error) {
+                console.error(
+                    'Failed to insert inbound vendor message into messages table:',
+                    error
+                );
+            }
         } catch (err) {
-            console.error('Failed to insert inbound message into messages table (vendor):', err);
+            console.error('Unexpected error inserting inbound vendor message:', err);
         }
 
+        // 4) Forward vendor update to landlord; keep same work_order_id on outbound row
         const forwardBody = `Update from vendor ${payload.from}:\n${body}`;
 
         try {
@@ -208,23 +270,27 @@ export const POST: RequestHandler = async ({ request }) => {
             headers: { 'Content-Type': 'application/json' }
         });
     }
-    
+
+    // --- Branch: Our own Sinch number or unknown sender ---
     if (sinchFromNorm && fromNorm === sinchFromNorm) {
-        // Just in case Sinch ever posts something that looks like it's from your own number
-        // Ignore message from our own Sinch number
+        console.log('Ignoring SMS that appears to originate from our own Sinch number');
     } else {
+        console.log('Inbound SMS from unknown sender; logging as system only');
         try {
-            await supabase.from('messages').insert({
+            const { error } = await supabase.from('messages').insert({
                 landlord_phone: landlordPhone,
                 vendor_phone: vendorPhone,
                 sender_role: 'system',
                 direction: 'inbound',
-                body: body,
+                body,
                 work_order_id: null,
-                received_at: inboundAt
             });
+
+            if (error) {
+                console.error('Failed to insert inbound unknown message into messages table:', error);
+            }
         } catch (err) {
-            console.error('Failed to insert inbound message into messages table:', err);
+            console.error('Unexpected error inserting inbound unknown message:', err);
         }
     }
 
