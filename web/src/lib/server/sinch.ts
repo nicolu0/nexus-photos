@@ -20,6 +20,12 @@ interface SendMessageOptions {
     senderRole?: 'landlord' | 'vendor' | 'system';
 }
 
+function normalizePhone(phone: string | null) {
+    if (!phone) return null;
+    const digits = phone.replace(/\D/g, '');
+    return digits || null;
+}
+
 export async function sendMessage(to: string, body: string, options: SendMessageOptions = {}) {
     if (!servicePlanId || !apiToken || !fromNumber) {
         throw new Error('Missing SINCH_SERVICE_PLAN_ID, SINCH_API_TOKEN, or SINCH_FROM_NUMBER');
@@ -51,11 +57,15 @@ export async function sendMessage(to: string, body: string, options: SendMessage
 
     const now = new Date().toISOString();
 
+    const normalizedLandlordPhone = normalizePhone(options.landlordPhone ?? null);
+    const normalizedVendorPhone = normalizePhone(options.vendorPhone ?? null);
+    const senderRole = options.senderRole ?? 'system';
+
     try {
         await supabase.from('messages').insert({
-            landlord_phone: options.landlordPhone,
-            vendor_phone: options.vendorPhone,
-            sender_role: options.senderRole,
+            landlord_phone: normalizedLandlordPhone,
+            vendor_phone: normalizedVendorPhone,
+            sender_role: senderRole,
             direction: 'outbound',
             body: body,
             work_order_id: options.workOrderId ?? null,
