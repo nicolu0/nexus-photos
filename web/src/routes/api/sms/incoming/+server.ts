@@ -75,6 +75,27 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const sinchMessageId = payload.id ?? null;
+
+    if (sinchMessageId) {
+        const { data: existing, error: existingError } = await supabase
+            .from('messages')
+            .select('id')
+            .eq('sinch_message_id', sinchMessageId).maybeSingle();
+
+        if (existingError) {
+            console.error('Failed to check for existing message:', existingError);
+        }
+        
+        if (existing) {
+            console.log('Message already exists, skipping:', existing);
+        }
+
+        return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+
+    const inboundAt = payload.received_at ?? new Date().toISOString();
     const body = payload.body ?? '';
 
     const fromNorm = normalize(payload.from);
