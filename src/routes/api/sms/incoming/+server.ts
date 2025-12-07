@@ -28,11 +28,33 @@ function normalize(num: string | undefined): string {
 
 export const POST: RequestHandler = async ({ request }) => {
     let payload: SinchIncomingSms;
+    
     try {
         payload = (await request.json()) as SinchIncomingSms;
     } catch (error) {
         console.error('Failed to parse request body as JSON:', error);
         return json({ error: 'Invalid JSON payload' }, { status: 400 });
+    }
+
+    const sinchMessageId = payload.id ?? null;
+
+    if (sinchMessageId) {
+        const { data: existing, error: existingError } = await supabase
+            .from('messages')
+            .select('id')
+            .eq('sinch_message_id', sinchMessageId).maybeSingle();
+
+        if (existingError) {
+            console.error('Failed to check for existing message:', existingError);
+        }
+        
+        if (existing) {
+            console.log('Message already exists, skipping:', existing);
+        }
+
+        return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 
     const inboundAt = payload.received_at ?? new Date().toISOString();
@@ -68,6 +90,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 direction: 'inbound',
                 body,
                 work_order_id: null,
+                sinch_message_id: sinchMessageId,
             });
 
             if (error) {
@@ -98,6 +121,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 direction: 'inbound',
                 body,
                 work_order_id: null,
+                sinch_message_id: sinchMessageId,
             });
 
             if (error) {
@@ -240,6 +264,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 direction: 'inbound',
                 body,
                 work_order_id: workOrderId,
+                sinch_message_id: sinchMessageId,
             });
 
             if (error) {
@@ -284,6 +309,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 direction: 'inbound',
                 body,
                 work_order_id: null,
+                sinch_message_id: sinchMessageId,
             });
 
             if (error) {
