@@ -26,56 +26,94 @@ function normalize(num: string | undefined): string {
     return (num ?? '').replace(/\D/g, '');
 }
 
-async function isRecentDuplicateInbound(
-    landlordPhone: string | null,
-    vendorPhone: string | null,
-    body: string,
-    windowMs = 10_000
-): Promise<boolean> {
-    if (!landlordPhone || !vendorPhone || !body.trim()) return false;
-
+async function insertInboundMessage(opts: {
+    landlordPhone: string | null;
+    vendorPhone: string | null;
+    senderRole: 'landlord' | 'vendor' | 'system';
+    body: string;
+    sinchMessageId: string | null;
+    workOrderId?: string | null;
+}): Promise<'inserted' | 'duplicate' | 'error'> {
     try {
-        const { data, error } = await supabase
-            .from('messages')
-            .select('id, created_at, body')
-            .eq('landlord_phone', landlordPhone)
-            .eq('vendor_phone', vendorPhone)
-            .eq('sender_role', 'vendor')
-            .eq('direction', 'inbound')
-            .eq('body', body)
-            .order('created_at', { ascending: false })
-            .limit(1);
-        
+        const { error } = await supabase.from('messages').insert({
+            landlord_phone: opts.landlordPhone,
+            vendor_phone: opts.vendorPhone,
+            sender_role: opts.senderRole,
+            direction: 'inbound',
+            body: opts.body,
+            work_order_id: opts.workOrderId ?? null,
+            sinch_message_id: opts.sinchMessageId,
+
+        });
+
         if (error) {
-            console.error('Failed to check recent duplicate vendor inbound:', error);
-            return false;
+            const code = (error as any).code;
+            if (code == '23305') {
+                console.log('Duplicate sinch_message_id detected, treating as retry and ignoring:', opts.sinchMessageId);
+                return 'duplicate';
+            }
+
+            console.error('Failed to insert inbound message:', error);
+            return 'error';
         }
 
-        if (!data || data.length === 0) return false;
-
-        const last = data[0] as { id: string; created_at: string; body: string };
-        if (!last.created_at) return false;
-
-        const lastTs = new Date(last.created_at).getTime();
-        if (Number.isNaN(lastTs)) return false;
-
-        const nowTs = Date.now();
-        const diff = nowTs - lastTs;
-
-        if (diff >= 0 && diff <= windowMs) {
-            console.log(
-                'Detected recent duplicate vendor inbound SMS, skipping processing:',
-                { landlordPhone, vendorPhone, body, diffMs: diff }
-            );
-            return true;
-        }
-
-        return false;
+        return 'inserted';
     } catch (err) {
-        console.error('Unexpected error while checking recent duplicate vendor inbound:', err);
-        return false;
+        console.error('Unexpected error inserting inbound message:', err);
+        return 'error';
     }
 }
+
+// async function isRecentDuplicateInbound(
+//     landlordPhone: string | null,
+//     vendorPhone: string | null,
+//     body: string,
+//     windowMs = 10_000
+// ): Promise<boolean> {
+//     if (!landlordPhone || !vendorPhone || !body.trim()) return false;
+
+//     try {
+//         const { data, error } = await supabase
+//             .from('messages')
+//             .select('id, created_at, body')
+//             .eq('landlord_phone', landlordPhone)
+//             .eq('vendor_phone', vendorPhone)
+//             .eq('sender_role', 'vendor')
+//             .eq('direction', 'inbound')
+//             .eq('body', body)
+//             .order('created_at', { ascending: false })
+//             .limit(1);
+        
+//         if (error) {
+//             console.error('Failed to check recent duplicate vendor inbound:', error);
+//             return false;
+//         }
+
+//         if (!data || data.length === 0) return false;
+
+//         const last = data[0] as { id: string; created_at: string; body: string };
+//         if (!last.created_at) return false;
+
+//         const lastTs = new Date(last.created_at).getTime();
+//         if (Number.isNaN(lastTs)) return false;
+
+//         const nowTs = Date.now();
+//         const diff = nowTs - lastTs;
+
+//         if (diff >= 0 && diff <= windowMs) {
+//             console.log(
+//                 'Detected recent duplicate vendor inbound SMS, skipping processing:',
+//                 { landlordPhone, vendorPhone, body, diffMs: diff }
+//             );
+//             return true;
+//         }
+
+//         return false;
+//     } catch (err) {
+//         console.error('Unexpected error while checking recent duplicate vendor inbound:', err);
+//         return false;
+//     }
+// }
 
 export const POST: RequestHandler = async ({ request }) => {
     let payload: SinchIncomingSms;
@@ -88,29 +126,6 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const sinchMessageId = payload.id ?? null;
-
-    if (sinchMessageId) {
-        try {
-            const { data: existing, error: existingError } = await supabase
-                .from('messages')
-                .select('id')
-                .eq('sinch_message_id', sinchMessageId)
-                .maybeSingle();
-
-            if (existingError) {
-                console.error('Failed to check for existing message:', existingError);
-            } else if (existing) {
-                console.log('Message already exists, skipping:', existing);
-                return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            }
-        } catch (err) {
-            console.error('Unexpected error while checking for existing message (duplicate checking):', err);
-        }
-    }
-
-    // const inboundAt = payload.received_at ?? new Date().toISOString();
     const body = payload.body ?? '';
 
     const fromNorm = normalize(payload.from);
@@ -135,25 +150,19 @@ export const POST: RequestHandler = async ({ request }) => {
     if (!landlordNorm || !vendorNorm) {
         console.warn('LANDLORD_PHONE_NUMBER or VENDOR_PHONE_NUMBER missing in env, skipping forward');
 
-        try {
-            const { error } = await supabase.from('messages').insert({
-                landlord_phone: landlordPhone,
-                vendor_phone: vendorPhone,
-                sender_role: 'system',
-                direction: 'inbound',
-                body,
-                work_order_id: null,
-                sinch_message_id: sinchMessageId,
-            });
+        const res = await insertInboundMessage({
+            landlordPhone,
+            vendorPhone,
+            senderRole: 'system',
+            body,
+            sinchMessageId,
+            workOrderId: null
+        });
 
-            if (error) {
-                console.error(
-                    'Failed to insert inbound message into messages table (missing env):',
-                    error
-                );
-            }
-        } catch (err) {
-            console.error('Unexpected error inserting inbound message (missing env):', err);
+        if (res === 'duplicate') {
+            return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
+                headers: { 'Content-Type': 'application/json' }
+            })
         }
 
         return new Response(JSON.stringify({ status: 'ok' }), {
@@ -163,28 +172,19 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // --- Branch: Landlord -> Vendor ---
     if (fromNorm === landlordNorm) {
-        const senderRole: 'landlord' = 'landlord';
+        const insert_res = await insertInboundMessage({
+            landlordPhone,
+            vendorPhone,
+            senderRole: 'landlord',
+            body,
+            sinchMessageId,
+            workOrderId: null
+        });
 
-        // 1) Log inbound landlord message
-        try {
-            const { error } = await supabase.from('messages').insert({
-                landlord_phone: landlordPhone,
-                vendor_phone: vendorPhone,
-                sender_role: senderRole,
-                direction: 'inbound',
-                body,
-                work_order_id: null,
-                sinch_message_id: sinchMessageId,
+        if (insert_res === 'duplicate') {
+            return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
+                headers: { 'Content-Type': 'application/json' }
             });
-
-            if (error) {
-                console.error(
-                    'Failed to insert inbound landlord message into messages table:',
-                    error
-                );
-            }
-        } catch (err) {
-            console.error('Unexpected error inserting inbound landlord message:', err);
         }
 
         // 2) Forward to vendor
@@ -195,7 +195,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 landlordPhone: landlordNumber ?? null,
                 vendorPhone: vendorNumber ?? null,
                 senderRole: 'landlord',
-                workOrderId: null // you can wire this later if the landlord text is tied to a specific work order
+                workOrderId: null // set later if the landlord text is tied to a specific work order
             });
         } catch (err) {
             console.error('Failed to forward landlord message to vendor:', err);
@@ -208,15 +208,22 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // --- Branch: Vendor -> Landlord ---
     if (fromNorm === vendorNorm) {
-        const senderRole: 'vendor' = 'vendor';
-        let workOrderId: string | null = null;
+        const insert_res = await insertInboundMessage({
+            landlordPhone,
+            vendorPhone,
+            senderRole: 'vendor',
+            body,
+            sinchMessageId,
+            workOrderId: null
+        });
 
-        const isDupe = await isRecentDuplicateInbound(landlordPhone, vendorPhone, body);
-        if (isDupe) {
-            return new Response(JSON.stringify({ status: 'duplicate_ignored_recent' }), {
+        if (insert_res === 'duplicate') {
+            return new Response(JSON.stringify({ status: 'duplicate_ignored'}), {
                 headers: { 'Content-Type': 'application/json' }
             });
         }
+
+        let workOrderId: string | null = null;
 
         // get candidate work orders
         let candidates: WorkOrderCandidate[] = [];
@@ -245,6 +252,10 @@ export const POST: RequestHandler = async ({ request }) => {
                 .select('sender_role, body, created_at')
                 .eq('landlord_phone', landlordPhone)
                 .eq('vendor_phone', vendorPhone)
+                .or(
+                    "and(direction.eq.inbound,sender_role.in.(landlord,vendor))," +
+                    "and(direction.eq.outbound,sender_role.eq.system)"
+                )
                 .order('created_at', { ascending: false })
                 .limit(10)
 
@@ -335,28 +346,6 @@ export const POST: RequestHandler = async ({ request }) => {
             console.error('Failed to classify vendor SMS:', err);
         }
 
-        // log inbound vendor message with attached work_order_id
-        try {
-            const { error } = await supabase.from('messages').insert({
-                landlord_phone: landlordPhone,
-                vendor_phone: vendorPhone,
-                sender_role: senderRole,
-                direction: 'inbound',
-                body,
-                work_order_id: workOrderId,
-                sinch_message_id: sinchMessageId,
-            });
-
-            if (error) {
-                console.error(
-                    'Failed to insert inbound vendor message into messages table:',
-                    error
-                );
-            }
-        } catch (err) {
-            console.error('Unexpected error inserting inbound vendor message:', err);
-        }
-
         // forward vendor update to landlord
         const forwardBody = `Update from vendor ${payload.from}:\n${body}`;
 
@@ -381,22 +370,20 @@ export const POST: RequestHandler = async ({ request }) => {
         console.log('Ignoring SMS that appears to originate from our own Sinch number');
     } else {
         console.log('Inbound SMS from unknown sender; logging as system only');
-        try {
-            const { error } = await supabase.from('messages').insert({
-                landlord_phone: landlordPhone,
-                vendor_phone: vendorPhone,
-                sender_role: 'system',
-                direction: 'inbound',
-                body,
-                work_order_id: null,
-                sinch_message_id: sinchMessageId,
-            });
+    
+        const res = await insertInboundMessage({
+            landlordPhone,
+            vendorPhone,
+            senderRole: 'system',
+            body,
+            sinchMessageId,
+            workOrderId: null
+        });
 
-            if (error) {
-                console.error('Failed to insert inbound unknown message into messages table:', error);
-            }
-        } catch (err) {
-            console.error('Unexpected error inserting inbound unknown message:', err);
+        if (res === 'duplicate') {
+            return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
         }
     }
 
