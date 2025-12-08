@@ -64,6 +64,57 @@ async function insertInboundMessage(opts: {
     }
 }
 
+// async function isRecentDuplicateInbound(
+//     landlordPhone: string | null,
+//     vendorPhone: string | null,
+//     body: string,
+//     windowMs = 10_000
+// ): Promise<boolean> {
+//     if (!landlordPhone || !vendorPhone || !body.trim()) return false;
+
+//     try {
+//         const { data, error } = await supabase
+//             .from('messages')
+//             .select('id, created_at, body')
+//             .eq('landlord_phone', landlordPhone)
+//             .eq('vendor_phone', vendorPhone)
+//             .eq('sender_role', 'vendor')
+//             .eq('direction', 'inbound')
+//             .eq('body', body)
+//             .order('created_at', { ascending: false })
+//             .limit(1);
+        
+//         if (error) {
+//             console.error('Failed to check recent duplicate vendor inbound:', error);
+//             return false;
+//         }
+
+//         if (!data || data.length === 0) return false;
+
+//         const last = data[0] as { id: string; created_at: string; body: string };
+//         if (!last.created_at) return false;
+
+//         const lastTs = new Date(last.created_at).getTime();
+//         if (Number.isNaN(lastTs)) return false;
+
+//         const nowTs = Date.now();
+//         const diff = nowTs - lastTs;
+
+//         if (diff >= 0 && diff <= windowMs) {
+//             console.log(
+//                 'Detected recent duplicate vendor inbound SMS, skipping processing:',
+//                 { landlordPhone, vendorPhone, body, diffMs: diff }
+//             );
+//             return true;
+//         }
+
+//         return false;
+//     } catch (err) {
+//         console.error('Unexpected error while checking recent duplicate vendor inbound:', err);
+//         return false;
+//     }
+// }
+
 export const POST: RequestHandler = async ({ request }) => {
     let payload: SinchIncomingSms;
     
@@ -75,29 +126,6 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const sinchMessageId = payload.id ?? null;
-
-    if (sinchMessageId) {
-        try {
-            const { data: existing, error: existingError } = await supabase
-                .from('messages')
-                .select('id')
-                .eq('sinch_message_id', sinchMessageId)
-                .maybeSingle();
-
-            if (existingError) {
-                console.error('Failed to check for existing message:', existingError);
-            } else if (existing) {
-                console.log('Message already exists, skipping:', existing);
-                return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            }
-        } catch (err) {
-            console.error('Unexpected error while checking for existing message (duplicate checking):', err);
-        }
-    }
-
-    // const inboundAt = payload.received_at ?? new Date().toISOString();
     const body = payload.body ?? '';
 
     const fromNorm = normalize(payload.from);
