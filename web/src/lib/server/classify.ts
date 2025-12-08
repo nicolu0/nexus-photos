@@ -47,7 +47,10 @@ export async function classifyVendorSms(
         };
     }
 
-    const messages = recentMessages.slice(10);
+    console.log('Conversation context:\n');
+    recentMessages.forEach((m) => {
+        console.log(`${m.sender_role}: ${m.body}`);
+    });
 
     const response = await openaiClient.responses.create({
         model: 'gpt-5-nano-2025-08-07',
@@ -87,7 +90,7 @@ export async function classifyVendorSms(
                             JSON.stringify(candidates, null, 2) +
                             '\n\nRecent conversation between landlord and vendor ' +
                             '(oldest first, most recent last):\n' +
-                            JSON.stringify(messages, null, 2)
+                            JSON.stringify(recentMessages, null, 2)
                     }
                 ]
             }

@@ -251,7 +251,7 @@ export const POST: RequestHandler = async ({ request }) => {
             if (error) {
                 console.error('Failed to fetch recent messages between landlord + vendor:', error);
             } else if (data) {
-                recentMessages = data as ConversationMessage[];
+                recentMessages = (data ?? []).reverse(); // get 10 most recent msgs in chronological order
             }
         } catch (err) {
             console.error('Unexpected error fetching recent messages between landlord + vendor:', err);
