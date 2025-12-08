@@ -47,7 +47,7 @@ export async function classifyVendorSms(
         };
     }
 
-    const messages = recentMessages.slice(-5);
+    const messages = recentMessages.slice(10);
 
     const response = await openaiClient.responses.create({
         model: 'gpt-5-nano-2025-08-07',

@@ -39,6 +39,8 @@ export async function sendMessage(to: string, body: string, options: SendMessage
         body,
     };
 
+    console.log('CALLED SEND MESSAGE!!!!!!!!!!!!! CALLED SEND MESSAGE!!!!!!!!!');
+
     const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -69,7 +71,7 @@ export async function sendMessage(to: string, body: string, options: SendMessage
             direction: 'outbound',
             body: body,
             work_order_id: options.workOrderId ?? null,
-            sent_at: now
+            created_at: now
         });
     } catch (err) {
         console.error('Failed to insert outbound message into messages table:', err);
