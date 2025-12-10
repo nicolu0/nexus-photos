@@ -1,106 +1,79 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { supabase } from '$lib/supabaseClient.ts';
+	import { invalidateAll } from '$app/navigation';
 	
 	type WorkorderRow = {
+	  email_id: string | null;
 	  Unit: string | null;
 	  Address: string | null;
 	  Problem: string;
 	  Vendor: string | null;
-	  Status: 'not started' | 'in progress' | 'done';
+	  Status: 'pending' | 'in_progress' | 'completed';
 	};
 
 	const user = $derived($page.data.user);
-
-	let message_ids = $state(["19af0166ea24351a"]);
-	let messages = $state<any[]>([]);
-	let workorders = $state<TodoRow[]>([]);
+	let workorders = $derived<WorkorderRow[]>($page.data.workorders ?? []);
 	let tokensOK = $state($page.data.tokensOK);
+	let loading = $state(false);
 
-	// async function loadMessageIDs() {
-	// 	try {
-	// 	  const res = await fetch(
-	// 		'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=6',
-	// 		{
-	// 		  headers: {
-	// 			Authorization: `Bearer ${accessToken}`
-	// 		  }
-	// 		}
-	// 	  );
-	// 	  const data = await res.json();
-	// 	  message_ids = data.messages ?? [];
-	// 	  return message_ids.map((m) => m.id);
-	// 	} catch (e) {
-	// 	  console.error(e);
-	// 	} 	
-	// }
-
-	// async function loadMessagesByIds(ids: string[]) {
-	// 	try {
-	// 	  const results = await Promise.all(
-	// 		ids.map((id) =>
-	// 		  fetch(
-	// 			`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`,
-	// 			{
-	// 			  headers: {
-	// 				Authorization: `Bearer ${accessToken}`
-	// 			  }
-	// 			}
-	// 		  ).then((r) => r.json())
-	// 		)
-	// 	  );
-	// 	  messages = results.map(simplifyMessage);
-	// 	} catch (e) {
-	// 	  console.error(e);
-	// 	}
-	// }
-
-	// async function generateTodoFromMessage(message: any){
-	// 	try {
-	// 		console.log('loading');
-	// 		const res = await fetch('/api/email2row', {
-	// 			method: 'POST',
-	// 			headers: { 'Content-Type': 'application/json' },
-	// 			body: JSON.stringify({ email: message.text })
-	// 		});
-	// 		if (!res.ok) {
-	// 		  console.error('email2row failed', await res.text());
-	// 		  return;
-	// 		}
-	// 		const row = await res.json();
-	// 		console.log(row);
-	// 		workorders = [...workorders, row];
-	// 	} catch(e) {
-	// 		console.error('error: ', e);
-	// 	}
-	// }
+	async function updateWorkorders(){
+		loading = true;
+		const res = await fetch('/api/workorders/update/', {
+			method: 'POST'
+		});
+		if(!res.ok){
+			console.log('update failed');
+			return;
+		}
+		loading = false;
+		await invalidateAll();
+	}
 
 	onMount(()=>{
 		//update workorders if tokens are good
 	});
 </script>
 
-{#if !tokensOK}
-	<a href="/api/oauth/google" class="text-blue-400 underline">connect gmail</a>
-{/if}
 
-{#if user}
-	<div>{user.id}</div>
-{/if}
-
-<div class="flex w-full items-center h-dvh justify-center">
-{#if workorders.length}
-  {#each workorders as w}
-    <div class="text-4xl text-black">
-      {w.Unit ?? 'Unknown unit'} ·
-      {w.Address ?? 'Unknown address'} ·
-      {w.Problem} ·
-      {w.Vendor ?? 'Unknown vendor'} ·
-      {w.Status}
-    </div>
-  {/each}
-{:else}
-  <div class="text-4xl text-stone-500">No workorders yet</div>
-{/if}
+<div class="flex w-full h-dvh flex-col py-10">
+	<div class="flex w-full bg-stone-300">
+		{#if !tokensOK}
+			<a href="/api/oauth/google" class="text-3xl text-blue-400 underline">connect gmail</a>
+		{/if}
+		{#if !loading}
+			<button
+				class="text-blue-400 underline text-3xl"
+				onclick={updateWorkorders}
+			>
+				update workorders
+			</button>
+		{:else}
+			<button
+				class="text-stone-400 underline text-3xl"
+			>
+				loading workorders...
+			</button>
+		{/if}
+	</div>
+	<div class="flex flex-row">
+		<div class="flex w-full bg-red-300">
+			<div class="text-4xl text-stone-500">Emails</div>
+		</div>
+		<div class="flex w-full bg-blue-300">
+			{#if workorders.length}
+			  {#each workorders as w}
+				<div class="text-xs text-black flex flex-row w-full">
+				  <div class="flex w-full">{w.Unit ?? 'Unknown unit'}</div>
+				  <div class="flex w-full">{w.Address ?? 'Unknown address'}</div>
+				  <div class="flex w-full">{w.Problem}</div>
+				  <div class="flex w-full">{w.Vendor ?? 'Unknown vendor'}</div>
+				  <div class="flex w-full">{w.Status}</div>
+				</div>
+			  {/each}
+			{:else}
+			  <div class="text-4xl text-stone-500">No workorders yet</div>
+			{/if}
+		</div>
+	</div>
 </div>

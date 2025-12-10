@@ -36,17 +36,14 @@ export type GmailMessage = {
 
 export type ExtractedContent = {
   text: string;
-  html: string | null;
 };
 
 export type SimplifiedMessage = {
   id: string;
-  subject: string;
-  from: string;
-  to: string;
-  date: string;
-  text: string;        // plain text body
-  html: string | null; // full HTML body if you want it
+  // subject: string;
+  // from: string;
+  // to: string;
+  text: string;
 };
 
 // --- Helpers ---
@@ -66,17 +63,13 @@ export function decodeBase64Url(data: string | undefined | null): string {
 
 export function extractTextFromPayload(payload: GmailPayload | undefined): ExtractedContent {
   const textParts: string[] = [];
-  const htmlParts: string[] = [];
 
   function walk(part: GmailMessagePart | undefined): void {
     if (!part) return;
 
     if (part.mimeType === 'text/plain' && part.body?.data) {
       textParts.push(decodeBase64Url(part.body.data));
-    } else if (part.mimeType === 'text/html' && part.body?.data) {
-      htmlParts.push(decodeBase64Url(part.body.data));
-    }
-
+    } 
     if (part.parts) {
       part.parts.forEach(walk);
     }
@@ -85,26 +78,22 @@ export function extractTextFromPayload(payload: GmailPayload | undefined): Extra
   walk(payload);
 
   return {
-    text: textParts.join('\n\n'),
-    html: htmlParts.length ? htmlParts.join('\n\n') : null
+    text: textParts.join('\n\n')
   };
 }
 
-export function simplifyMessage(msg: GmailMessage): SimplifiedMessage {
-  const headers = msg.payload?.headers ?? [];
+export function simplifyThread(thread): SimplifiedMessage {
+  console.log('THREAD ID: ', thread.id);
+  console.log('THREAD FROM SIMPLIFY MESSAGE: ', thread.messages);
+  const messages = thread.messages;
+  const processed = messages.map(m => extractTextFromPayload(m.payload));
+  console.log('text extracted messages: ', processed);
+  // get thread messages, extract text for each using map, join
 
-  const getHeader = (name: string): string =>
-    headers.find((h) => h.name === name)?.value ?? '';
+  // return {
+  //   id: thread.id,
+  //   text
+  // };
 
-  const { text, html } = extractTextFromPayload(msg.payload);
-
-  return {
-    id: msg.id,
-    subject: getHeader('Subject'),
-    from: getHeader('From'),
-    to: getHeader('To'),
-    date: getHeader('Date'),
-    text,
-    html
-  };
+  return;
 }
