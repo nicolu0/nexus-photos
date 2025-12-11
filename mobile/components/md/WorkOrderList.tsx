@@ -88,5 +88,5 @@ export function WorkOrderList({
             )}
             contentContainerStyle={contentContainerStyle}
         />
-    )
+    );
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
@@ -30,7 +30,6 @@ export default function CameraScreen() {
     useEffect(() => {
         fetchWorkOrders(landlord_number);
     }, [landlord_number]);
-
     return (
         <View className="flex-1 bg-stone-50 px-4 py-6" style={{ paddingTop: insets.top + 24 }}>
             <View>
