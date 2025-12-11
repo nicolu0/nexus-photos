@@ -1,7 +1,4 @@
 // src/lib/messageHelpers.ts
-
-// --- Gmail API types (minimal) ---
-
 export type GmailHeader = {
   name: string;
   value: string;
@@ -46,7 +43,6 @@ export type SimplifiedMessage = {
   text: string;
 };
 
-// --- Helpers ---
 
 export function decodeBase64Url(data: string | undefined | null): string {
   if (!data) return '';
@@ -62,6 +58,7 @@ export function decodeBase64Url(data: string | undefined | null): string {
 }
 
 export function extractTextFromPayload(payload: GmailPayload | undefined): ExtractedContent {
+	console.log('payload: ', payload);
   const textParts: string[] = [];
 
   function walk(part: GmailMessagePart | undefined): void {
@@ -83,17 +80,20 @@ export function extractTextFromPayload(payload: GmailPayload | undefined): Extra
 }
 
 export function simplifyThread(thread): SimplifiedMessage {
-  console.log('THREAD ID: ', thread.id);
+  console.log('THREAD: ', thread);
   console.log('THREAD FROM SIMPLIFY MESSAGE: ', thread.messages);
   const messages = thread.messages;
   const processed = messages.map(m => extractTextFromPayload(m.payload));
   console.log('text extracted messages: ', processed);
   // get thread messages, extract text for each using map, join
+  const text = processed
+  	.map((m) => m.text)
+	.filter(Boolean)
+	.join('\n\n');
 
-  // return {
-  //   id: thread.id,
-  //   text
-  // };
+  return {
+    id: thread.id,
+    text
+  };
 
-  return;
 }

@@ -16,18 +16,62 @@
 	let workorders = $derived<WorkorderRow[]>($page.data.workorders ?? []);
 	let tokensOK = $state($page.data.tokensOK);
 	let loading = $state(false);
+	let emails = $state([]);
 
-	async function updateWorkorders(){
+	// async function updateWorkorders(){
+	// 	loading = true;
+	// 	const res = await fetch('/api/workorders/update/', {
+	// 		method: 'POST'
+	// 	});
+	// 	if(!res.ok){
+	// 		console.log('update failed');
+	// 		return;
+	// 	}
+	// 	loading = false;
+	// 	await invalidateAll();
+	// }
+
+	async function getThreads(){
 		loading = true;
-		const res = await fetch('/api/workorders/update/', {
-			method: 'POST'
-		});
-		if(!res.ok){
-			console.log('update failed');
-			return;
+		try {
+			const res = await fetch('/api/workorders/update/', {
+				method: 'POST'
+			});
+			if(!res.ok){
+				console.log('update failed');
+				return;
+			}
+			const data = await res.json();
+			console.log('fetch res: ', data.threads);
+			emails = data.threads;
+		} finally {
+			loading = false;
 		}
-		loading = false;
-		await invalidateAll();
+	}
+
+	async function getSuggestion(email: {id: string; text: string }){
+		console.log('getting suggestion for: ', email);
+		// try {
+		// 	const res = await fetch('/api/workorders/update/', {
+		// 		method: 'POST',
+		// 		headers: {
+		// 			'Content-Type': 'application/json'
+		// 		},
+		// 		body: JSON.stringify({
+		// 			threadId: email.id,
+		// 			text: email.text
+		// 		})
+		// 	});
+		// 	if(!res.ok){
+		// 		console.log('update failed');
+		// 		return;
+		// 	}
+		// 	const data = await res.json();
+		// 	console.log('fetch res: ', data.threads);
+		// 	emails = data.threads;
+		// } finally {
+		// 	loading = false;
+		// }
 	}
 
 	onMount(()=>{
@@ -37,28 +81,31 @@
 
 
 <div class="flex w-full h-dvh flex-col py-10">
-	<div class="flex w-full bg-stone-300">
+	<div class="flex w-full bg-stone-300 gap-4">
 		{#if !tokensOK}
 			<a href="/api/oauth/google" class="text-3xl text-blue-400 underline">connect gmail</a>
 		{/if}
-		{#if !loading}
-			<button
-				class="text-blue-400 underline text-3xl"
-				onclick={updateWorkorders}
-			>
-				update workorders
-			</button>
-		{:else}
-			<button
-				class="text-stone-400 underline text-3xl"
-			>
-				loading workorders...
-			</button>
-		{/if}
+		<button
+			class="text-blue-400 underline text-3xl"
+			onclick={getThreads}
+		>
+			{loading ? "loading..." : "get emails"}
+		</button>
 	</div>
 	<div class="flex flex-row">
-		<div class="flex w-full bg-red-300">
+		<div class="flex w-full bg-red-300 flex-col">
 			<div class="text-4xl text-stone-500">Emails</div>
+			{#if emails.length}
+			  {#each emails as e}
+				<div class="text-xs text-black flex flex-row w-full gap-4 p-4">
+				  <div class="flex">{e.id}</div>
+				  <div class="flex w-full">{e.text}</div>
+				  <button class="bg-stone-50 whitespace-nowrap" onclick={()=>getSuggestion(e)}>AI SUGGESTION</button>
+				</div>
+			  {/each}
+			{:else}
+			  <div class="text-4xl text-stone-500">No emails yet</div>
+			{/if}
 		</div>
 		<div class="flex w-full bg-blue-300">
 			{#if workorders.length}

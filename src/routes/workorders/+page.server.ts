@@ -1,5 +1,4 @@
 import type { PageServerLoad } from './$types';
-import { updateWorkorders } from '$lib/server/workorders'; 
 
 // TODO :: v1 needs to autorefresh tokens
 // 1. doesn't exist
@@ -27,6 +26,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.from('work_orders')
 		.select('email_id, unit_label, property_label, summary, vendor_name, status')
 		.eq('user_id', locals.user.id);
+
 	const workorders = rows.map((r)=>({
 		email_id: r.email_id,
 		Unit: r.unit_label,
