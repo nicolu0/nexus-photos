@@ -1,14 +1,34 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, Modal, ActivityIndicator, Alert, Dimensions, TextInput, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, Image, TouchableOpacity, Modal, ActivityIndicator,
+    Alert, Dimensions, TextInput, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useImages, type CapturedImage } from '../../context/ImagesContext';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 
 // const API_BASE_URL = 'https://www.nexus.photos';
 const API_BASE_URL = 'https://daphne-unradical-barb.ngrok-free.dev';
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ImagesScreen() {
+    const isIOS = Platform.OS === 'ios';
+    const [glassAvailable, setGlassAvailable] = useState(false);
+
+    useEffect(() => {
+        if (!isIOS) return;
+
+        (async () => {
+            try {
+                // Handles both sync and async implementations
+                const available = await Promise.resolve(isLiquidGlassAvailable());
+                setGlassAvailable(!!available);
+            } catch (err) {
+                console.warn('Error checking Liquid Glass availability:', err);
+                setGlassAvailable(false);
+            }
+        })();
+    }, [isIOS]);
+
     const { images } = useImages();
     const insets = useSafeAreaInsets();
     const [selectedImage, setSelectedImage] = useState<CapturedImage | null>(null);
@@ -20,65 +40,40 @@ export default function ImagesScreen() {
             // Compress and resize image before uploading to avoid 413 errors
             const manipulatedImage = await ImageManipulator.manipulateAsync(
                 imageUri,
-                [{ resize: { width: 1920 } }], // Resize to max width of 1920px (maintains aspect ratio)
-                { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG } // Compress to 70% quality
+                [{ resize: { width: 1920 } }],
+                { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
             );
 
-            // Create FormData for React Native
             const formData = new FormData();
             const fileName = imageUri.split('/').pop() ?? 'damage.jpg';
             formData.append('image', {
                 // @ts-ignore React Native file
                 uri: manipulatedImage.uri,
                 type: 'image/jpeg',
-                name: fileName,
+                name: fileName
             } as any);
-            
-            // Add message if provided
+
             if (additionalMessage && additionalMessage.trim()) {
                 formData.append('message', additionalMessage.trim());
             }
 
-            // Make API call
-            // Note: Don't set Content-Type header - React Native will set it automatically with boundary
             const res = await fetch(`${API_BASE_URL}/api/photo`, {
                 method: 'POST',
-                body: formData,
+                body: formData
             });
 
-            /**
-            const base64 = await FileSystem.readAsStringAsync(imageUri, {
-                encoding: 'base64'
-            });
-
-            const payload = {
-                imageBase64: base64,
-                mimeType: 'image/jpeg'
-            };
-
-            const res = await fetch(`${API_BASE_URL}/api/photo`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-            **/
-
-            // Read response as text first, then parse as JSON
-            // This allows us to handle both JSON and non-JSON error responses
             const responseText = await res.text();
-            
-            let json;
+
+            let json: any;
             try {
                 json = JSON.parse(responseText);
-            } catch (parseError) {
-                // If it's not JSON, show the raw response (likely an error page)
-                throw new Error(`Server error (${res.status}): ${responseText.substring(0, 200)}`);
+            } catch {
+                throw new Error(
+                    `Server error (${res.status}): ${responseText.substring(0, 200)}`
+                );
             }
 
             if (!res.ok) {
-                // Handle 413 Payload Too Large error specifically
                 if (res.status === 413) {
                     Alert.alert(
                         'Image Too Large',
@@ -98,9 +93,7 @@ export default function ImagesScreen() {
                     [{ text: 'OK' }]
                 );
             } else if (json.sentToVendor) {
-                Alert.alert('Sent', 'Damage summary sent to vendor.', [
-                    { text: 'OK' }
-                ]);
+                Alert.alert('Sent', 'Damage summary sent to vendor.', [{ text: 'OK' }]);
             } else {
                 Alert.alert(
                     'Analyzed only',
@@ -121,7 +114,7 @@ export default function ImagesScreen() {
         try {
             await uploadImageToAPI(selectedImage.uri, message);
             setSelectedImage(null);
-            setMessage(''); // Clear message after sending
+            setMessage('');
         } catch (error: any) {
             Alert.alert('Error', error?.message ?? 'Failed to send image. Please try again.');
         } finally {
@@ -129,24 +122,27 @@ export default function ImagesScreen() {
         }
     }
 
-    // Calculate image dimensions: 30% of screen height with 4:3 aspect ratio
-    const imageHeight = SCREEN_HEIGHT * 0.3;
-    let imageWidth = (imageHeight * 4) / 3; // 4:3 aspect ratio
-    
-    // Ensure image fits within screen width (accounting for modal padding)
-    const maxWidth = SCREEN_WIDTH - 64; // 32px padding on each side
+    const imageHeight = SCREEN_HEIGHT * 0.25;
+    let imageWidth = (imageHeight * 4) / 3;
+    const maxWidth = SCREEN_WIDTH - 64;
     if (imageWidth > maxWidth) {
         imageWidth = maxWidth;
     }
 
+    const Panel: any = glassAvailable ? GlassView : View;
+    const panelExtraProps = glassAvailable
+        ? {
+              glassEffectStyle: 'regular' as const,
+              tintColor: 'rgba(20, 20, 20, 0.2)'
+          }
+        : {};
+
     return (
-        <View className="flex-1 bg-slate-950 px-4 py-6" style={{ paddingTop: insets.top + 24 }}>
-            <Text className="text-white text-xl font-semibold mb-3">
-                Images
-            </Text>
+        <View className="flex-1 bg-stone-50 px-4 py-6" style={{ paddingTop: insets.top + 24 }}>
+            <Text className="text-stone-900 text-xl font-semibold mb-3">Images</Text>
 
             {images.length === 0 ? (
-                <Text className="text-slate-400 text-sm">
+                <Text className="text-stone-500 text-sm">
                     No images yet. Take a photo in the Camera tab.
                 </Text>
             ) : (
@@ -158,7 +154,7 @@ export default function ImagesScreen() {
                     columnWrapperStyle={{ gap: 8, marginBottom: 8 }}
                     renderItem={({ item }) => (
                         <TouchableOpacity
-                            className="flex-1 aspect-square border border-slate-800 overflow-hidden bg-slate-900"
+                            className="flex-1 aspect-square overflow-hidden"
                             onPress={() => setSelectedImage(item)}
                             activeOpacity={0.8}
                         >
@@ -174,7 +170,7 @@ export default function ImagesScreen() {
 
             <Modal
                 visible={selectedImage !== null}
-                transparent={true}
+                transparent
                 animationType="fade"
                 onRequestClose={() => {
                     setSelectedImage(null);
@@ -183,66 +179,97 @@ export default function ImagesScreen() {
             >
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    className="flex-1"
+                    className="bg-black/60 flex-1"
                 >
-                    <View className="flex-1 bg-black/80 justify-center items-center px-4">
+                    <View className="flex-1 justify-center items-center px-4">
                         <ScrollView
                             contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
                             keyboardShouldPersistTaps="handled"
                         >
-                            <View className="bg-slate-900 rounded-2xl p-6 w-full items-center">
-                                {selectedImage && (
-                                    <>
-                                        <View className="items-center mb-4" style={{ width: '100%' }}>
-                                            <Image
-                                                source={{ uri: selectedImage.uri }}
-                                                style={{ width: imageWidth, height: imageHeight, maxWidth: '100%' }}
-                                                resizeMode="contain"
-                                            />
-                                        </View>
-                                        <View className="w-full mb-4">
-                                            <Text className="text-slate-300 text-sm font-medium mb-2">
-                                                Additional Details (Optional)
-                                            </Text>
-                                            <TextInput
-                                                className="bg-slate-800 text-white rounded-lg px-4 py-3 text-base border border-slate-700"
-                                                placeholder="e.g., Unit 302, Property: 123 Main St..."
-                                                placeholderTextColor="#94a3b8"
-                                                value={message}
-                                                onChangeText={setMessage}
-                                                multiline
-                                                numberOfLines={3}
-                                                textAlignVertical="top"
-                                                editable={!loading}
-                                            />
-                                        </View>
-                                        <TouchableOpacity
-                                            onPress={handleSendToVendor}
-                                            disabled={loading}
-                                            className="bg-indigo-500 rounded-lg px-6 py-3 items-center w-full active:bg-indigo-400 disabled:opacity-50"
-                                        >
-                                            {loading ? (
-                                                <ActivityIndicator size="small" color="#ffffff" />
-                                            ) : (
-                                                <Text className="text-white text-base font-semibold">
-                                                    Send to Vendor
+                            <Panel
+                                {...panelExtraProps}
+                                className="rounded-2xl w-full"
+                                style={{
+                                    borderRadius: 16,
+                                    overflow: 'hidden',
+                                    borderWidth: glassAvailable ? 1 : 0,
+                                    borderColor: glassAvailable
+                                        ? 'rgba(255, 255, 255, 0.1)'
+                                        : 'transparent'
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        backgroundColor: glassAvailable
+                                            ? 'rgba(0, 0, 0, 0.3)'
+                                            : 'rgba(0, 0, 0, 0.8)',
+                                        padding: 24,
+                                        alignItems: 'center',
+                                    }}
+                                >
+                                    {selectedImage && (
+                                        <>
+                                            <View
+                                                className="items-center mb-4"
+                                                style={{ width: '100%' }}
+                                            >
+                                                <Image
+                                                    source={{ uri: selectedImage.uri }}
+                                                    style={{
+                                                        width: imageWidth,
+                                                        height: imageHeight,
+                                                        maxWidth: '100%'
+                                                    }}
+                                                    resizeMode="contain"
+                                                />
+                                            </View>
+
+                                            <View className="w-full mb-4">
+                                                <Text className="text-white text-sm font-medium mb-2">
+                                                    Additional Details (Optional)
                                                 </Text>
-                                            )}
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                setSelectedImage(null);
-                                                setMessage('');
-                                            }}
-                                            className="mt-3 bg-slate-700 rounded-lg px-6 py-3 items-center w-full active:bg-slate-600"
-                                        >
-                                            <Text className="text-white text-base font-semibold">
-                                                Cancel
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </>
-                                )}
-                            </View>
+                                                <TextInput
+                                                    className="bg-white/10 text-white rounded-lg px-4 py-3 text-base border border-white/10"
+                                                    placeholder="e.g., Unit 302, Property: 123 Main St..."
+                                                    placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                                                    value={message}
+                                                    onChangeText={setMessage}
+                                                    multiline
+                                                    numberOfLines={3}
+                                                    textAlignVertical="top"
+                                                    editable={!loading}
+                                                />
+                                            </View>
+
+                                            <TouchableOpacity
+                                                onPress={handleSendToVendor}
+                                                disabled={loading}
+                                                className="bg-indigo-500 rounded-lg px-6 py-3 items-center w-full active:bg-indigo-400 disabled:opacity-50"
+                                            >
+                                                {loading ? (
+                                                    <ActivityIndicator size="small" color="#ffffff" />
+                                                ) : (
+                                                    <Text className="text-white text-base font-semibold">
+                                                        Send to Vendor
+                                                    </Text>
+                                                )}
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    setSelectedImage(null);
+                                                    setMessage('');
+                                                }}
+                                                className="mt-3 bg-slate-700 rounded-lg px-6 py-3 items-center w-full active:bg-slate-600"
+                                            >
+                                                <Text className="text-white text-base font-semibold">
+                                                    Cancel
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </>
+                                    )}
+                                </View>
+                            </Panel>
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
