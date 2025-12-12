@@ -1,6 +1,6 @@
 // src/lib/server/workorders.ts
 import { simplifyThread } from '$lib/messageHelpers';
-import { emailToRow } from '$lib/server/email2row';
+import { getAISuggestion } from '$lib/server/suggestion';
 
 export async function getThreads(supabase, userId: string) {
 	// 1a) load gmail_tokens for userId
@@ -95,7 +95,7 @@ export async function updateWorkorders(supabase, userId: string) {
 	// let rows; 
 	// try {
 	//   const allrows = await Promise.all(
-	// 	messages.map(emailToRow)
+	// 	messages.map(getAISuggestion)
 	//   );
 	//   rows = allrows.filter((r) => r.Status !== null);
 	// } catch (e) {

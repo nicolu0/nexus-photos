@@ -42,36 +42,92 @@
 				return;
 			}
 			const data = await res.json();
-			console.log('fetch res: ', data.threads);
-			emails = data.threads;
+			emails = data.threads.map((t) => ({
+				...t,
+				loading: false,
+				suggestion: '',
+			}));
 		} finally {
 			loading = false;
 		}
 	}
 
+	async function approveSuggestion(emailId: string) {
+		const email = emails.find((e) => e.id === emailId);
+		if (!email || !email.suggestion) return;
+
+		const suggestion = email.suggestion;
+		console.log('SUGGESTION: ', suggestion);
+
+		try {
+			const res = await fetch('/api/workorders/approve/', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ workorder: suggestion })
+			});
+
+			if (!res.ok) {
+				console.error('approve failed');
+				return;
+			}
+
+			const data = await res.json();
+			// assume server returns { workorder: {...} }
+			const approved = data.workorder;
+
+			// replace existing by email_id, or append if not found
+			let found = false;
+			const updated = workorders.map((w) => {
+				if (w.email_id === approved.email_id) {
+					found = true;
+					return approved;
+				}
+				return w;
+			});
+
+			if (!found) {
+				updated.push(approved);
+			}
+
+			workorders = updated;
+
+			// mark this email as approved (so you can disable Yes)
+			// emails = emails.map((e) =>
+			// 	e.id === emailId ? { ...e, approved: true } : e
+			// );
+		} catch (err) {
+			console.error('approve error', err);
+		}
+	}
+
 	async function getSuggestion(email: {id: string; text: string }){
-		console.log('getting suggestion for: ', email);
-		// try {
-		// 	const res = await fetch('/api/workorders/update/', {
-		// 		method: 'POST',
-		// 		headers: {
-		// 			'Content-Type': 'application/json'
-		// 		},
-		// 		body: JSON.stringify({
-		// 			threadId: email.id,
-		// 			text: email.text
-		// 		})
-		// 	});
-		// 	if(!res.ok){
-		// 		console.log('update failed');
-		// 		return;
-		// 	}
-		// 	const data = await res.json();
-		// 	console.log('fetch res: ', data.threads);
-		// 	emails = data.threads;
-		// } finally {
-		// 	loading = false;
-		// }
+		emails = emails.map((e) => 
+			e.id === email.id ? { ...e, loading: true } : e
+		);
+		try {
+			const res = await fetch('/api/workorders/suggestion/', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ email })
+			});
+			if(!res.ok){
+				console.log('update failed');
+				return;
+			}
+			const data = await res.json();
+			console.log('suggestion: ', data.suggestion);
+			emails = emails.map((e) =>
+				e.id === email.id ? { ...e, suggestion: data.suggestion } : e
+			);
+		} finally {
+			emails = emails.map((e) =>
+				e.id === email.id ? { ...e, loading: false} : e
+			);
+		}
 	}
 
 	onMount(()=>{
@@ -93,21 +149,38 @@
 		</button>
 	</div>
 	<div class="flex flex-row">
-		<div class="flex w-full bg-red-300 flex-col">
+		<div class="flex w-full flex-col">
 			<div class="text-4xl text-stone-500">Emails</div>
 			{#if emails.length}
 			  {#each emails as e}
 				<div class="text-xs text-black flex flex-row w-full gap-4 p-4">
-				  <div class="flex">{e.id}</div>
-				  <div class="flex w-full">{e.text}</div>
-				  <button class="bg-stone-50 whitespace-nowrap" onclick={()=>getSuggestion(e)}>AI SUGGESTION</button>
+					<div class="flex">{e.id}</div>
+					<div class="flex w-full">{e.text}</div>
+					<button 
+					  class="bg-stone-100 whitespace-nowrap h-8 p-4 items-center flex border" 
+					  onclick={()=>getSuggestion(e)}
+					  disabled={e.loading}
+					>
+						{#if e.loading}
+							loading...
+						{:else}
+							GENERATE
+						{/if}
+					</button>
+					<div class="flex w-full flex-col">
+						{e.suggestion ? e.suggestion.AiSummary : 'Click GENERATE for an AI suggestion'}
+						{#if e.suggestion}
+							<button class="bg-green-400 p-4" onclick={()=>approveSuggestion(e.id)}>Yes</button>
+							<button class="bg-red-400 p-4">No</button>
+						{/if}
+					</div>
 				</div>
 			  {/each}
 			{:else}
 			  <div class="text-4xl text-stone-500">No emails yet</div>
 			{/if}
 		</div>
-		<div class="flex w-full bg-blue-300">
+		<div class="flex w-full bg-blue-300 flex-col">
 			{#if workorders.length}
 			  {#each workorders as w}
 				<div class="text-xs text-black flex flex-row w-full">
