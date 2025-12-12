@@ -12,6 +12,18 @@ export function WorkOrderList({
     workOrders,
     contentContainerStyle
 }: WorkOrderProps) {
+    const formatDateTime = (iso: string | null) => {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return '—';
+        return d.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        });
+    };
+
     if (workOrders.length === 0) {
         return (
             <View className="flex-1 justify-center items-center px-8">
@@ -31,10 +43,10 @@ export function WorkOrderList({
             keyExtractor={(item) => item.id}
             // id, property_label, unit_label, vendor_phone, vendor_name, vendor_trade, summary, status, created_at, updated_at
             renderItem={({ item }) => (
-                <View className="mb-3 mx-4 rounded-xl bg-white border border-gray-200 px-4 py-3">
+                <View className="mb-3 mx-2 rounded-xl bg-white border border-gray-200 px-4 py-3">
                     <View className="flex-row justify-between items-center mb-1">
                         <View className="flex-row items-center">
-                            <Text className="ml-1.5 text-sm font-semibold text-stone-800">
+                            <Text className="text-sm font-semibold text-stone-800">
                                 {item.property_label} · {item.unit_label}
                             </Text>
                         </View>
@@ -55,6 +67,23 @@ export function WorkOrderList({
                             </Text>
                         </View>
                     </View>
+
+                    <Text className="text-xs text-stone-500 mb-1">
+                        {item.vendor_name} - {item.vendor_trade}
+                    </Text>
+
+                    <View className="flex-row justify-between items-center mt-1">
+                        <Text className="text-[11px] text-stone-500">
+                            Started {formatDateTime(item.created_at)}
+                        </Text>
+                        <Text className="text-[11px] text-stone-400">
+                            Last activity {formatDateTime(item.updated_at)}
+                        </Text>
+                    </View>
+
+                    <Text className="text-stone-600 mt-2">
+                        {item.summary}
+                    </Text>
                 </View>
             )}
             contentContainerStyle={contentContainerStyle}
