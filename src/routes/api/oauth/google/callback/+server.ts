@@ -4,10 +4,10 @@ import type { RequestHandler } from './$types';
 import { redirect } from '@sveltejs/kit';
 
 const REDIRECT = 'http://localhost:5173/api/oauth/google/callback';
-const OK = 'http://localhost:5173/todo';
+const OK = 'http://localhost:5173/workorders';
 
-export const GET: RequestHandler = async (event) => {
-	const url = event.url;
+export const GET: RequestHandler = async ({url, locals}) => {
+	if (!locals.user) throw redirect(302, '/');
 	const code = url.searchParams.get('code');
 	const state = url.searchParams.get('state');
     if (!code) {
@@ -27,11 +27,26 @@ export const GET: RequestHandler = async (event) => {
 		body
 	});
 
-	const tokens = await tokenRes.json();
-	const access_token = tokens.access_token;
-	console.log('tokens: ', tokens);
+	const tokens = await tokenRes.json() as {
+		access_token: string;
+		refresh_token?: string;
+		expires_in: number;
+		scope: string;
+		token_type: string;
+	};
 
-	const ok = new URL('/todo', event.url.origin);
-	ok.searchParams.set('token', access_token);
+	const now = Date.now();
+	const accessTokenExpiresAt = new Date(now + tokens.expires_in * 1000).toISOString();
+
+	await locals.supabase
+	  .from('gmail_tokens')
+	  .upsert({
+		user_id: locals?.user?.id,
+		access_token: tokens.access_token,
+		refresh_token: tokens.refresh_token,
+		expiration: accessTokenExpiresAt
+	  });
+
+	const ok = new URL('/workorders', url.origin);
 	throw redirect(302, ok);
 };
