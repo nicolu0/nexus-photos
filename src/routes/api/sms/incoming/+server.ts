@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { sendMessage } from '$lib/server/sinch';
-import { classifyVendorSms } from '$lib/server/openai';
+import { classifyVendorSms } from '$lib/server/classify';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 

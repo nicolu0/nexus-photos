@@ -33,10 +33,12 @@ export const GET: RequestHandler = async ({url, locals}) => {
 		expires_in: number;
 		scope: string;
 		token_type: string;
+		refresh_token_expires_in: number;
 	};
 
 	const now = Date.now();
 	const accessTokenExpiresAt = new Date(now + tokens.expires_in * 1000).toISOString();
+	const refreshTokenExpiresAt = new Date(now + tokens.refresh_token_expires_in * 1000).toISOString();
 
 	await locals.supabase
 	  .from('gmail_tokens')
@@ -44,7 +46,8 @@ export const GET: RequestHandler = async ({url, locals}) => {
 		user_id: locals?.user?.id,
 		access_token: tokens.access_token,
 		refresh_token: tokens.refresh_token,
-		expiration: accessTokenExpiresAt
+		expiration: accessTokenExpiresAt,
+		refreshExpiration: refreshTokenExpiresAt
 	  });
 
 	const ok = new URL('/workorders', url.origin);

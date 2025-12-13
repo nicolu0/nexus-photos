@@ -123,8 +123,8 @@
 
 <div class="flex w-full h-dvh flex-col py-10">
 	<div class="flex w-full bg-stone-300 gap-4">
+		<a href="/api/oauth/google" class="text-3xl text-blue-400 underline">connect gmail</a>
 		{#if !tokensOK}
-			<a href="/api/oauth/google" class="text-3xl text-blue-400 underline">connect gmail</a>
 		{/if}
 		<button
 			class="text-blue-400 underline text-3xl"
@@ -180,6 +180,10 @@
 			{:else}
 			  <div class="text-4xl text-stone-500">No workorders yet</div>
 			{/if}
+		</div>
+		<div class="flex w-full flex-col border p-4 rounded-xl">
+			<div class="text-4xl text-stone-500">Vendors</div>
+			<div class="text-2xl text-stone-500">Mario and Luigi: 21andrewch@alumni.harker.org</div>
 		</div>
 	</div>
 </div>

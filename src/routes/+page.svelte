@@ -301,6 +301,3 @@
 		onKeydown={handleKeydown}
 	/>
 {/if}
-<div class="flex">
-  Hello
-</div>
