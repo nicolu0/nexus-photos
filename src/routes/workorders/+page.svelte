@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { invalidateAll } from '$app/navigation';
 	
 	type WorkorderRow = {
 	  email_id: string | null;
@@ -18,23 +17,10 @@
 	let loading = $state(false);
 	let emails = $state([]);
 
-	// async function updateWorkorders(){
-	// 	loading = true;
-	// 	const res = await fetch('/api/workorders/update/', {
-	// 		method: 'POST'
-	// 	});
-	// 	if(!res.ok){
-	// 		console.log('update failed');
-	// 		return;
-	// 	}
-	// 	loading = false;
-	// 	await invalidateAll();
-	// }
-
 	async function getThreads(){
 		loading = true;
 		try {
-			const res = await fetch('/api/workorders/update/', {
+			const res = await fetch('/api/gmail/getThreads/', {
 				method: 'POST'
 			});
 			if(!res.ok){
@@ -60,7 +46,7 @@
 		console.log('SUGGESTION: ', suggestion);
 
 		try {
-			const res = await fetch('/api/workorders/approve/', {
+			const res = await fetch('/api/workorders/approveSuggestion/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -107,7 +93,7 @@
 			e.id === email.id ? { ...e, loading: true } : e
 		);
 		try {
-			const res = await fetch('/api/workorders/suggestion/', {
+			const res = await fetch('/api/workorders/getSuggestion/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -119,7 +105,6 @@
 				return;
 			}
 			const data = await res.json();
-			console.log('suggestion: ', data.suggestion);
 			emails = emails.map((e) =>
 				e.id === email.id ? { ...e, suggestion: data.suggestion } : e
 			);
@@ -148,8 +133,8 @@
 			{loading ? "loading..." : "get emails"}
 		</button>
 	</div>
-	<div class="flex flex-row">
-		<div class="flex w-full flex-col">
+	<div class="flex flex-row p-2 gap-2">
+		<div class="flex w-full flex-col border p-4 rounded-xl">
 			<div class="text-4xl text-stone-500">Emails</div>
 			{#if emails.length}
 			  {#each emails as e}
@@ -180,7 +165,8 @@
 			  <div class="text-4xl text-stone-500">No emails yet</div>
 			{/if}
 		</div>
-		<div class="flex w-full bg-blue-300 flex-col">
+		<div class="flex w-full flex-col border p-4 rounded-xl">
+			<div class="text-4xl text-stone-500">Work-orders</div>
 			{#if workorders.length}
 			  {#each workorders as w}
 				<div class="text-xs text-black flex flex-row w-full">

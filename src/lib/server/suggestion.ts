@@ -46,15 +46,16 @@ export async function getAISuggestion( email: { id: string; text: string }): Pro
       '        * "Heater replacement"\n' +
       '    - Vendor: the name of the vendor mentioned in the email (e.g., plumbing company, handyman).\n' +
       '      If unclear, guess the most reasonable trade (e.g. "plumber", "electrician"); if truly unknown, use null.\n' +
-      '    - Status: one of "pending", "in_progress", or "completed".\n' +
-      '      * "pending": the email reports an issue or requests help; no work has started.\n' +
-      '      * "in_progress": work is scheduled, being worked on, or awaiting parts/approval.\n' +
-      '      * "completed": the email clearly says the work is finished / resolved.\n' +
-      '    - AiSummary: a short 1–2 sentence summary of what the assistant suggests the system/property manager should do NEXT,\n' +
-      '      based on this email thread and the extracted fields.\n' +
-      '      * Focus on the action, not re-quoting the email.\n' +
-      '      * Example for a new issue: "Create a new plumbing work order for the kitchen sink leak in Unit 4B at 67 Mushroom Lane and schedule Mario to inspect it on Wednesday."\n' +
-      '      * Example for a follow-up: "Update the existing plumbing work order to in-progress and confirm Mario is scheduled to visit on Wednesday."\n' +
+      '    - Status: one of "pending", "in_progress", or "completed". Use the email THREAD context to decide:\n' +
+      '      * "pending": appears to be a brand new issue report from a tenant or owner; no evidence yet of vendor scheduling, work being done, or invoices.\n' +
+      '      * "in_progress": there is evidence that work is being scheduled or carried out (e.g. replies like "we will send a plumber", "I am available Monday", "we are working on it").\n' +
+      '      * "completed": the email indicates that the work is finished or an invoice/final bill is being sent (e.g. "work is complete", "attached is the invoice", "everything is fixed now").\n' +
+      '    - AiSummary: a short 1–2 sentence summary of what the system/property manager should do NEXT, based on this thread and the chosen Status.\n' +
+      '      The FIRST WORDS of AiSummary MUST follow this pattern, based on Status:\n' +
+      '        * If Status = "pending": start with **"Create a new work order: ..."**\n' +
+      '        * If Status = "in_progress": start with **"Update the existing work order: ..."**\n' +
+      '        * If Status = "completed": start with **"Close the work order: ..."**\n' +
+      '      After that prefix, briefly describe the key action (e.g. who the vendor is, what the issue is, and any timing such as visit dates).\n' +
       '  - If Unit or Address are not mentioned, set them to null (do NOT guess or hallucinate).\n\n' +
       'If the email is NOT relevant to property/unit/building maintenance or vendor work (e.g., marketing, newsletters, ' +
       'bank alerts, personal messages, generic spam, unrelated business topics):\n' +
