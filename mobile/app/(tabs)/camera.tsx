@@ -61,11 +61,11 @@ export default function CameraScreen() {
     }
 
     return (
-        <View className="flex-1 bg-slate-950 px-4 py-6" style={{ paddingTop: insets.top + 24 }}>
-            <Text className="text-white text-xl font-semibold mb-1">
+        <View className="flex-1 bg-stone-50 px-4 py-6" style={{ paddingTop: insets.top + 24 }}>
+            <Text className="text-stone-900 text-xl font-semibold mb-1">
                 Camera
             </Text>
-            <Text className="text-slate-400 text-xs mb-4">
+            <Text className="text-stone-500 text-xs mb-4">
                 Take a photo or select from your camera roll. It will show up in the Images tab.
             </Text>
 
