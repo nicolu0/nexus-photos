@@ -57,6 +57,10 @@ export default function ImagesScreen() {
                 formData.append('message', additionalMessage.trim());
             }
 
+            if (additionalMessage && additionalMessage.trim()) {
+                formData.append('message', additionalMessage.trim());
+            }
+
             const res = await fetch(`${API_BASE_URL}/api/photo`, {
                 method: 'POST',
                 body: formData

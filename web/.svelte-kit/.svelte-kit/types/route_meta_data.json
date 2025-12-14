@@ -1,0 +1,30 @@
+{
+	"/": [],
+	"/api/gmail/getThreads": [
+		"src/routes/api/gmail/getThreads/+server.ts"
+	],
+	"/api/oauth/google": [
+		"src/routes/api/oauth/google/+server.ts"
+	],
+	"/api/oauth/google/callback": [
+		"src/routes/api/oauth/google/callback/+server.ts"
+	],
+	"/api/photo": [
+		"src/routes/api/photo/+server.ts"
+	],
+	"/api/sms/incoming": [
+		"src/routes/api/sms/incoming/+server.ts"
+	],
+	"/api/workorders/approveSuggestion": [
+		"src/routes/api/workorders/approveSuggestion/+server.ts"
+	],
+	"/api/workorders/getSuggestion": [
+		"src/routes/api/workorders/getSuggestion/+server.ts"
+	],
+	"/photos": [
+		"src/routes/photos/+page.server.ts"
+	],
+	"/workorders": [
+		"src/routes/workorders/+page.server.ts"
+	]
+}
