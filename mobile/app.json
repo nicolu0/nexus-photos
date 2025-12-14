@@ -54,7 +54,8 @@
         {
           "cameraPermissionText": "Nexus needs access to your Camera."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
