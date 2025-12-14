@@ -52,6 +52,11 @@ export default function ImagesScreen() {
                 type: 'image/jpeg',
                 name: fileName
             } as any);
+            
+            // Add message if provided
+            if (additionalMessage && additionalMessage.trim()) {
+                formData.append('message', additionalMessage.trim());
+            }
 
             if (additionalMessage && additionalMessage.trim()) {
                 formData.append('message', additionalMessage.trim());
