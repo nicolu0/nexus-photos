@@ -1,23 +1,71 @@
-node_modules
+########################################
+# Dependencies
+########################################
+node_modules/
 
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/web/.svelte-kit
-/build
-
-# OS
+########################################
+# OS / editor junk
+########################################
 .DS_Store
 Thumbs.db
 
-# Env
+########################################
+# Logs / debug
+########################################
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.*
+
+########################################
+# Env files
+########################################
 .env
 .env.*
+.env*.local
 !.env.example
 !.env.test
 
-# Vite
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
+########################################
+# TypeScript
+########################################
+*.tsbuildinfo
+
+########################################
+# Web (SvelteKit / Vercel / Netlify / Wrangler)
+########################################
+web/.svelte-kit/
+web/build/
+web/.output/
+web/.vercel/
+web/.netlify/
+web/.wrangler/
+web/vite.config.*.timestamp-*
+
+########################################
+# Mobile (Expo / React Native)
+########################################
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/expo-env.d.ts
+mobile/.metro-health-check*
+
+# Generated native folders (you currently ignore these)
+mobile/ios/
+mobile/android/
+
+# Native / signing / keys
+mobile/.kotlin/
+mobile/*.orig.*
+mobile/*.jks
+mobile/*.p8
+mobile/*.p12
+mobile/*.key
+mobile/*.mobileprovision
+mobile/*.pem
+
+########################################
+# Misc
+########################################
+app-example
