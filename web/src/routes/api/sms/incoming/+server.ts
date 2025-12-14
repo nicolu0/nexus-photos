@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { sendMessage } from '$lib/server/sinch';
-import { classifyVendorSms, type WorkOrderCandidate } from '$lib/server/classify';
+import { classifyVendorSms, type WorkOrderCandidate, type ConversationMessage } from '$lib/server/classify';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 
@@ -26,6 +26,57 @@ function normalize(num: string | undefined): string {
     return (num ?? '').replace(/\D/g, '');
 }
 
+async function isRecentDuplicateInbound(
+    landlordPhone: string | null,
+    vendorPhone: string | null,
+    body: string,
+    windowMs = 10_000
+): Promise<boolean> {
+    if (!landlordPhone || !vendorPhone || !body.trim()) return false;
+
+    try {
+        const { data, error } = await supabase
+            .from('messages')
+            .select('id, created_at, body')
+            .eq('landlord_phone', landlordPhone)
+            .eq('vendor_phone', vendorPhone)
+            .eq('sender_role', 'vendor')
+            .eq('direction', 'inbound')
+            .eq('body', body)
+            .order('created_at', { ascending: false })
+            .limit(1);
+        
+        if (error) {
+            console.error('Failed to check recent duplicate vendor inbound:', error);
+            return false;
+        }
+
+        if (!data || data.length === 0) return false;
+
+        const last = data[0] as { id: string; created_at: string; body: string };
+        if (!last.created_at) return false;
+
+        const lastTs = new Date(last.created_at).getTime();
+        if (Number.isNaN(lastTs)) return false;
+
+        const nowTs = Date.now();
+        const diff = nowTs - lastTs;
+
+        if (diff >= 0 && diff <= windowMs) {
+            console.log(
+                'Detected recent duplicate vendor inbound SMS, skipping processing:',
+                { landlordPhone, vendorPhone, body, diffMs: diff }
+            );
+            return true;
+        }
+
+        return false;
+    } catch (err) {
+        console.error('Unexpected error while checking recent duplicate vendor inbound:', err);
+        return false;
+    }
+}
+
 export const POST: RequestHandler = async ({ request }) => {
     let payload: SinchIncomingSms;
     
@@ -39,25 +90,27 @@ export const POST: RequestHandler = async ({ request }) => {
     const sinchMessageId = payload.id ?? null;
 
     if (sinchMessageId) {
-        const { data: existing, error: existingError } = await supabase
-            .from('messages')
-            .select('id')
-            .eq('sinch_message_id', sinchMessageId).maybeSingle();
+        try {
+            const { data: existing, error: existingError } = await supabase
+                .from('messages')
+                .select('id')
+                .eq('sinch_message_id', sinchMessageId)
+                .maybeSingle();
 
-        if (existingError) {
-            console.error('Failed to check for existing message:', existingError);
+            if (existingError) {
+                console.error('Failed to check for existing message:', existingError);
+            } else if (existing) {
+                console.log('Message already exists, skipping:', existing);
+                return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        } catch (err) {
+            console.error('Unexpected error while checking for existing message (duplicate checking):', err);
         }
-        
-        if (existing) {
-            console.log('Message already exists, skipping:', existing);
-        }
-
-        return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
-            headers: { 'Content-Type': 'application/json' }
-        });
     }
 
-    const inboundAt = payload.received_at ?? new Date().toISOString();
+    // const inboundAt = payload.received_at ?? new Date().toISOString();
     const body = payload.body ?? '';
 
     const fromNorm = normalize(payload.from);
@@ -158,7 +211,14 @@ export const POST: RequestHandler = async ({ request }) => {
         const senderRole: 'vendor' = 'vendor';
         let workOrderId: string | null = null;
 
-        // 1) Get candidate work orders for this landlord+vendor with status pending/in_progress
+        const isDupe = await isRecentDuplicateInbound(landlordPhone, vendorPhone, body);
+        if (isDupe) {
+            return new Response(JSON.stringify({ status: 'duplicate_ignored_recent' }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // get candidate work orders
         let candidates: WorkOrderCandidate[] = [];
         try {
             const { data, error } = await supabase
@@ -177,9 +237,29 @@ export const POST: RequestHandler = async ({ request }) => {
             console.error('Unexpected error fetching work_orders candidates for vendor:', err);
         }
 
-        // 2) Classify vendor SMS + choose best work order
+        // get list of recent messages in conversation
+        let recentMessages: ConversationMessage[] = [];
         try {
-            const classification = await classifyVendorSms(body, candidates);
+            const { data, error } = await supabase
+                .from('messages')
+                .select('sender_role, body, created_at')
+                .eq('landlord_phone', landlordPhone)
+                .eq('vendor_phone', vendorPhone)
+                .order('created_at', { ascending: false })
+                .limit(10)
+
+            if (error) {
+                console.error('Failed to fetch recent messages between landlord + vendor:', error);
+            } else if (data) {
+                recentMessages = data as ConversationMessage[];
+            }
+        } catch (err) {
+            console.error('Unexpected error fetching recent messages between landlord + vendor:', err);
+        }
+
+        // classify vendor SMS + choose best work order
+        try {
+            const classification = await classifyVendorSms(body, candidates, recentMessages);
 
             console.log('Vendor SMS classification:', {
                 sms: body,
@@ -255,7 +335,7 @@ export const POST: RequestHandler = async ({ request }) => {
             console.error('Failed to classify vendor SMS:', err);
         }
 
-        // 3) Log inbound vendor message with attached work_order_id (if any)
+        // log inbound vendor message with attached work_order_id
         try {
             const { error } = await supabase.from('messages').insert({
                 landlord_phone: landlordPhone,
@@ -277,7 +357,7 @@ export const POST: RequestHandler = async ({ request }) => {
             console.error('Unexpected error inserting inbound vendor message:', err);
         }
 
-        // 4) Forward vendor update to landlord; keep same work_order_id on outbound row
+        // forward vendor update to landlord
         const forwardBody = `Update from vendor ${payload.from}:\n${body}`;
 
         try {
