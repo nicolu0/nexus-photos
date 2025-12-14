@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		if(error) console.error('error: ', error);
 
 		const now = new Date();
-		const expiresAt = data?.expiration ? new Date(data.expiration) : null;
+		const expiresAt = data?.refreshExpiration ? new Date(data.refreshExpiration) : null;
 		const expired = !expiresAt || expiresAt <= now;
 		const ok = !!data && !error && !expired;
 

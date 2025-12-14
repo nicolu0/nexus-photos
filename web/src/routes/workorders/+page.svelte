@@ -123,15 +123,16 @@
 
 <div class="flex w-full h-dvh flex-col py-10">
 	<div class="flex w-full bg-stone-300 gap-4">
-		<a href="/api/oauth/google" class="text-3xl text-blue-400 underline">connect gmail</a>
 		{#if !tokensOK}
+			<a href="/api/oauth/google" class="text-3xl text-blue-400 underline">connect gmail</a>
+		{:else}
+			<button
+				class="text-blue-400 underline text-3xl"
+				onclick={getThreads}
+			>
+				{loading ? "loading..." : "get emails"}
+			</button>
 		{/if}
-		<button
-			class="text-blue-400 underline text-3xl"
-			onclick={getThreads}
-		>
-			{loading ? "loading..." : "get emails"}
-		</button>
 	</div>
 	<div class="flex flex-row p-2 gap-2">
 		<div class="flex w-full flex-col border p-4 rounded-xl">
