@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 export default function TabLayout() {
     const segments = useSegments();
     const currentRoute = segments[segments.length - 1];
-    const isCamera = currentRoute === 'camera' || currentRoute === undefined;
+    const isCamera = currentRoute === 'video' || currentRoute === undefined;
 
     const [useNativeTabs, setUseNativeTabs] = useState(false);
 
@@ -52,18 +52,18 @@ export default function TabLayout() {
             <>
                 <StatusBar style="dark" backgroundColor="white" />
                 <NativeTabs tintColor={tintColor}>
-                    <NativeTabs.Trigger name="dashboard">
-                        <Label>Dashboard</Label>
-                        {Platform.select({
-                            ios: <Icon sf="square.grid.2x2.fill" />,
-                            android: (
-                                <Icon src={<VectorIcon family={Ionicons} name="grid" />} />
-                            ),
-                        })}
-                    </NativeTabs.Trigger>
+                {/*     <NativeTabs.Trigger name="dashboard"> */}
+                {/*         <Label>Dashboard</Label> */}
+                {/*         {Platform.select({ */}
+                {/*             ios: <Icon sf="square.grid.2x2.fill" />, */}
+                {/*             android: ( */}
+                {/*                 <Icon src={<VectorIcon family={Ionicons} name="grid" />} /> */}
+                {/*             ), */}
+                {/*         })} */}
+                {/*     </NativeTabs.Trigger> */}
 
-                    <NativeTabs.Trigger name="camera">
-                        <Label>Camera</Label>
+                    <NativeTabs.Trigger name="video">
+                        <Label>Video</Label>
                         {Platform.select({
                             ios: <Icon sf="camera.fill" />,
                             android: (
@@ -72,15 +72,15 @@ export default function TabLayout() {
                         })}
                     </NativeTabs.Trigger>
 
-                    <NativeTabs.Trigger name="images">
-                        <Label>Images</Label>
-                        {Platform.select({
-                            ios: <Icon sf="photo.stack.fill" />,
-                            android: (
-                                <Icon src={<VectorIcon family={Ionicons} name="images" />} />
-                            ),
-                        })}
-                    </NativeTabs.Trigger>
+                    {/* <NativeTabs.Trigger name="images"> */}
+                    {/*     <Label>Images</Label> */}
+                    {/*     {Platform.select({ */}
+                    {/*         ios: <Icon sf="photo.stack.fill" />, */}
+                    {/*         android: ( */}
+                    {/*             <Icon src={<VectorIcon family={Ionicons} name="images" />} /> */}
+                    {/*         ), */}
+                    {/*     })} */}
+                    {/* </NativeTabs.Trigger> */}
                 </NativeTabs>
             </>
         );
@@ -105,23 +105,23 @@ export default function TabLayout() {
                     tabBarInactiveTintColor: isCamera ? 'white' : 'black',
                 }}
             >
+                {/* <Tabs.Screen */}
+                {/*     name="dashboard" */}
+                {/*     options={{ */}
+                {/*         title: 'Dashboard', */}
+                {/*         tabBarIcon: ({ color, focused }) => ( */}
+                {/*             <Ionicons */}
+                {/*                 name={focused ? 'grid' : 'grid-outline'} */}
+                {/*                 size={22} */}
+                {/*                 color={color} */}
+                {/*             /> */}
+                {/*         ), */}
+                {/*     }} */}
+                {/* /> */}
                 <Tabs.Screen
-                    name="dashboard"
+                    name="video"
                     options={{
-                        title: 'Dashboard',
-                        tabBarIcon: ({ color, focused }) => (
-                            <Ionicons
-                                name={focused ? 'grid' : 'grid-outline'}
-                                size={22}
-                                color={color}
-                            />
-                        ),
-                    }}
-                />
-                <Tabs.Screen
-                    name="camera"
-                    options={{
-                        title: 'Camera',
+                        title: 'Video',
                         tabBarIcon: ({ color, focused }) => (
                             <Ionicons
                                 name={focused ? 'camera' : 'camera-outline'}
@@ -131,19 +131,19 @@ export default function TabLayout() {
                         ),
                     }}
                 />
-                <Tabs.Screen
-                    name="images"
-                    options={{
-                        title: 'Images',
-                        tabBarIcon: ({ color, focused }) => (
-                            <Ionicons
-                                name={focused ? 'images' : 'images-outline'}
-                                size={22}
-                                color={color}
-                            />
-                        ),
-                    }}
-                />
+                {/* <Tabs.Screen */}
+                {/*     name="images" */}
+                {/*     options={{ */}
+                {/*         title: 'Images', */}
+                {/*         tabBarIcon: ({ color, focused }) => ( */}
+                {/*             <Ionicons */}
+                {/*                 name={focused ? 'images' : 'images-outline'} */}
+                {/*                 size={22} */}
+                {/*                 color={color} */}
+                {/*             /> */}
+                {/*         ), */}
+                {/*     }} */}
+                {/* /> */}
             </Tabs>
         </>
     );
