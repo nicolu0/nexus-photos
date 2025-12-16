@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, useCameraFormat } from 'react-native-vision-camera';
 
 export default function VideoScreen() {
